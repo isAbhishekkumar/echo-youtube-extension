@@ -82,11 +82,12 @@ open class EchoSongEndPoint(override val api: YoutubeiApi) : ApiEndpoint() {
             artists = artists.map { it.toArtist(ThumbnailProvider.Quality.HIGH) },
             album = album?.toAlbum(false, ThumbnailProvider.Quality.HIGH),
             duration = duration,
-            isLiked = liked,
             extras = mutableMapOf<String, String>().apply {
                 relatedBrowseId?.let { put("relatedId", it) }
                 lyricsBrowseId?.let { put("lyricsId", it) }
+                put("isLiked", liked.toString())
             },
+
         )
     }
 }

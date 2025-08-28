@@ -1579,7 +1579,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     }
 
     override suspend fun loadFeed(album: Album): Feed<Shelf>? {
-        val tracks = loadTracks(album).loadAll()
+        val tracks = loadTracks(album)?.loadAll() ?: emptyList()
         val lastTrack = tracks.lastOrNull() ?: return null
         val loadedTrack = loadTrack(lastTrack, false)
         val shelves = loadRelated(loadedTrack)
@@ -1607,6 +1607,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val title = it.title?.getString(ENGLISH)
             val single = title == SINGLES
             Shelf.Lists.Items(
+                id = it.title?.getString(language)?.hashCode()?.toString() ?: "Unknown",
                 title = it.title?.getString(language) ?: "Unknown",
                 subtitle = it.subtitle?.getString(language),
                 list = it.items?.mapNotNull { item ->
@@ -1625,7 +1626,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         } ?: emptyList()
     }
 
-    override suspend fun loadFeed(artist: Artist): Feed<Shelf>? {
+    override suspend fun loadFeed(artist: Artist): Feed<Shelf> {
         val shelves = getArtistMediaItems(artist)
         return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
     }
@@ -1656,7 +1657,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val track = Track(id, "")
             val loadedTrack = loadTrack(track, false)
             val feed = loadFeed(loadedTrack)
-            feed?.loadList(null)?.data?.filterIsInstance<Shelf.Category>() ?: emptyList()
+            feed?.getPagedData(null)?.pagedData?.load(null)?.data?.filterIsInstance<Shelf.Category>() ?: emptyList()
         } else {
             val continuation = songRelatedEndpoint.loadFromPlaylist(cont).getOrThrow()
             continuation.map { it.toShelf(api, language, thumbnailQuality) }
@@ -1892,7 +1893,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             is Album -> radio(item)
             is Artist -> radio(item)
             is Playlist -> radio(item)
-            else -> throw ClientException("Radio not supported for this media item")
+            else -> throw ClientException.NotSupported("Radio not supported for this media item")
         }
     }
     
@@ -1903,7 +1904,37 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     override suspend fun onTrackChanged(details: TrackDetails?) {}
     
     override suspend fun onPlayingStateChanged(details: TrackDetails?, isPlaying: Boolean) {}
-        is EchoMediaItem.Profile.UserItem -> "https://music.youtube.com/channel/${item.id}"
-        is EchoMediaItem.TrackItem -> "https://music.youtube.com/watch?v=${item.id}"
+    
+    // LikeClient implementation
+    override suspend fun isItemLiked(item: EchoMediaItem): Boolean {
+        return item.extras["isLiked"]?.toBoolean() ?: false
+    }
+    
+    override suspend fun likeItem(item: EchoMediaItem, shouldLike: Boolean) {
+        // Implement like functionality
+    }
+    
+    // FollowClient implementation
+    override suspend fun isFollowing(item: EchoMediaItem): Boolean {
+        return item.extras["isFollowed"]?.toBoolean() ?: false
+    }
+    
+    override suspend fun getFollowersCount(item: EchoMediaItem): Long? {
+        return item.extras["followerCount"]?.toLong()
+    }
+    
+    override suspend fun followItem(item: EchoMediaItem, shouldFollow: Boolean) {
+        // Implement follow functionality
+    }
+    
+    // LyricsSearchClient implementation
+    override suspend fun searchLyrics(query: String): Feed<Lyrics> {
+        return listOf<Lyrics>().toFeed()
+    }
+    
+    // TrackerMarkClient implementation
+    override suspend fun getMarkAsPlayedDuration(details: TrackDetails): Long? {
+        return null
+    }
     }
 }

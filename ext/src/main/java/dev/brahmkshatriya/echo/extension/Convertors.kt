@@ -26,7 +26,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 
 // Extension function to create a Date object from a string year
-fun String.toDate() = Date(this.toInt())
+fun String.toDate() = Date.Companion.Int.toYearDate(this.toInt())
 
 suspend fun MediaItemLayout.toShelf(
     api: YoutubeiApi,
@@ -35,6 +35,7 @@ suspend fun MediaItemLayout.toShelf(
 ): Shelf {
     val single = title?.getString(ENGLISH) == SINGLES
     return Shelf.Lists.Items(
+        id = title?.getString(language)?.hashCode()?.toString() ?: "Unknown",
         title = title?.getString(language) ?: "Unknown",
         subtitle = subtitle?.getString(language),
         list = items.mapNotNull { item ->
@@ -83,9 +84,9 @@ fun YtmPlaylist.toPlaylist(
         title = name ?: "Unknown",
         isEditable = bool.getOrNull(1) ?: false,
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
-        authors = artists?.map { it.toUser(quality) } ?: emptyList(),
-        trackCount = item_count,
-        duration = total_duration,
+        authors = artists?.map { it.toUser(quality) } as? List<Artist> ?: emptyList(),
+        trackCount = item_count?.toLong(),
+        duration = total_duration?.toLong(),
         creationDate = year?.toDate(),
         description = description,
         extras = extras,
@@ -152,11 +153,11 @@ fun YtmArtist.toArtist(
         id = id,
         name = name ?: "Unknown",
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
-        description = description,
-        followers = subscriber_count,
-        isFollowing = subscribed ?: false,
+        bio = description,
         extras = mutableMapOf<String, String>().apply {
             subscribe_channel_id?.let { put("subId", it) }
+            subscriber_count?.let { put("subscriberCount", it.toString()) }
+            subscribed?.let { put("isSubscribed", it.toString()) }
         }
     )
 }
