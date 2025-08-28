@@ -35,7 +35,10 @@ fun String.toDate(): Date = Date(this.toInt())
 fun String.toDateFromTimestamp(): Date = Date(this.toLong())
 
 // Extension function to check if a string contains a timestamp
-fun String.containsTimestamp(): Boolean = this.contains(Regex("\\d{10,}"))
+fun String.containsTimestamp(): Boolean {
+    val regex = Regex("\\d{10,}")
+    return regex.containsMatchIn(this)
+}
 
 suspend fun MediaItemLayout.toShelf(
     api: YoutubeiApi,
@@ -100,7 +103,7 @@ fun YtmPlaylist.toPlaylist(
         trackCount = item_count?.toLong(),
         duration = total_duration?.toLong(),
         creationDate = year?.let { yearStr -> 
-            if (Regex("\\d{10,}").matches(yearStr)) Date(yearStr.toLong()) else Date(yearStr.toInt())
+            if (yearStr.matches(Regex("\\d{10,}"))) Date(yearStr.toLong()) else Date(yearStr.toInt())
         },
         description = description,
         extras = extras,
@@ -122,7 +125,7 @@ fun YtmPlaylist.toAlbum(
         artists = artists?.map { it.toArtist(quality) } ?: emptyList(),
         trackCount = item_count ?: if (single) 1 else null,
         releaseDate = year?.let { yearStr -> 
-            if (Regex("\\d{10,}").matches(yearStr)) Date(yearStr.toLong()) else Date(yearStr.toInt())
+            if (yearStr.matches(Regex("\\d{10,}"))) Date(yearStr.toLong()) else Date(yearStr.toInt())
         },
         label = null,
         duration = total_duration?.toLong(),

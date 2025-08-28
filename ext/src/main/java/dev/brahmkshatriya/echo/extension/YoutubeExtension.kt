@@ -19,7 +19,6 @@ import dev.brahmkshatriya.echo.common.clients.ShareClient
 import dev.brahmkshatriya.echo.common.clients.TrackClient
 import dev.brahmkshatriya.echo.common.clients.TrackerClient
 import dev.brahmkshatriya.echo.common.clients.TrackerMarkClient
-import dev.brahmkshatriya.echo.common.models.TrackDetails
 import dev.brahmkshatriya.echo.common.helpers.ClientException
 import dev.brahmkshatriya.echo.common.helpers.Page
 import dev.brahmkshatriya.echo.common.helpers.PagedData
@@ -32,38 +31,12 @@ import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.loadAll
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeedData
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.pagedDataOfFirst
-
-/**
- * A PagedData implementation that converts a list of EchoMediaItems to Shelves
- */
-private class MediaItemsToShelfPagedData(private val mediaItems: PagedData<EchoMediaItem>) : PagedData<Shelf>() {
-    override fun clear() {
-        mediaItems.clear()
-    }
-    
-    override suspend fun loadAllInternal(): List<Shelf> {
-        return mediaItems.loadAll().map { Shelf.Item(it) }
-    }
-    
-    override suspend fun loadListInternal(continuation: String?): Page<Shelf> {
-        val items = mediaItems.loadAll().map { Shelf.Item(it) }
-        return Page(items, null)
-    }
-    
-    override fun invalidate(continuation: String?) {
-        mediaItems.invalidate(continuation)
-    }
-    
-    override fun <R : Any> map(block: suspend (Result<List<Shelf>>) -> List<R>): PagedData<R> {
-        return PagedData.Single { block(runCatching { loadAll() }) }
-    }
-}
 import dev.brahmkshatriya.echo.common.models.Lyrics
+import dev.brahmkshatriya.echo.common.models.NetworkRequest
+import dev.brahmkshatriya.echo.common.models.NetworkRequest.Companion.toGetRequest
 import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.QuickSearchItem
 import dev.brahmkshatriya.echo.common.models.Radio
-import dev.brahmkshatriya.echo.common.models.NetworkRequest
-import dev.brahmkshatriya.echo.common.models.NetworkRequest.Companion.toGetRequest
 import dev.brahmkshatriya.echo.common.models.Shelf
 import dev.brahmkshatriya.echo.common.models.Streamable
 import dev.brahmkshatriya.echo.common.models.Streamable.Media.Companion.toMedia
@@ -71,6 +44,18 @@ import dev.brahmkshatriya.echo.common.models.Tab
 import dev.brahmkshatriya.echo.common.models.Track
 import dev.brahmkshatriya.echo.common.models.TrackDetails
 import dev.brahmkshatriya.echo.common.models.User
+
+/**
+ * Creates a PagedData<Shelf> from PagedData<EchoMediaItem>
+ */
+private fun createShelfPagedDataFromMediaItems(mediaItems: PagedData<EchoMediaItem>): PagedData<Shelf> {
+    return PagedData.Continuous { continuation ->
+        val page = mediaItems.loadPage(continuation)
+        val shelves = page.data.map { item -> Shelf.Item(item) }
+        Page(shelves, page.continuation)
+    }
+}
+import dev.brahmkshatriya.echo.common.models.TrackDetails
 import dev.brahmkshatriya.echo.common.settings.Setting
 import dev.brahmkshatriya.echo.common.settings.SettingSwitch
 import dev.brahmkshatriya.echo.common.settings.Settings
@@ -1651,7 +1636,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                         }.flatten()
                     }.let { mediaItems ->
                         Feed(listOf()) { _ -> 
-                            Feed.Data(MediaItemsToShelfPagedData(mediaItems))
+                            Feed.Data(createShelfPagedDataFromMediaItems(mediaItems))
                         }
                     }
                 })
@@ -1695,7 +1680,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val feed = loadFeed(loadedTrack)
             coroutineScope { 
                 if (feed != null) {
-                    val items = Feed.Companion.loadAll(feed)
+                    val items = feed.loadAll()
                     items.filterIsInstance<Shelf.Category>()
                 } else emptyList()
             }
@@ -1762,7 +1747,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                 YoutubeiAuthenticationState(api, headers, user.id.ifEmpty { null })
             api.user_auth_state = authenticationState
         }
-        api.visitor_id = visitorEndpoint.getVisitorId()
+        api.visitor_id = runCatching { kotlinx.coroutines.runBlocking { visitorEndpoint.getVisitorId() } }.getOrNull()
     }
 
     override suspend fun getCurrentUser(): User? {

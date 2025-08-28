@@ -19,34 +19,17 @@ fun String.toRequest(headers: Map<String, String> = emptyMap()): NetworkRequest 
  * Extension function to load all items in a Feed
  */
 suspend fun <T : Any> Feed<T>.load(): List<T> {
-    return Feed.Companion.loadAll(this)
+    return this.loadAll()
 }
 
 /**
- * A PagedData implementation that converts EchoMediaItems to Shelves
+ * Converts a PagedData of EchoMediaItems to a PagedData of Shelves
  */
-private class ShelfPagedData(private val original: PagedData<EchoMediaItem>) : PagedData<Shelf>() {
-    override fun clear() {
-        original.clear()
-    }
-    
-    override suspend fun loadAllInternal(): List<Shelf> {
-        val items = original.loadAll()
-        return items.map { Shelf.Item(it) }
-    }
-    
-    override suspend fun loadListInternal(continuation: String?): Page<Shelf> {
+private fun createShelfPagedData(original: PagedData<EchoMediaItem>): PagedData<Shelf> {
+    return PagedData.Continuous { continuation ->
         val page = original.loadPage(continuation)
         val shelves = page.data.map { item -> Shelf.Item(item) }
-        return Page(shelves, page.continuation)
-    }
-    
-    override fun invalidate(continuation: String?) {
-        original.invalidate(continuation)
-    }
-    
-    override fun <R : Any> map(block: suspend (Result<List<Shelf>>) -> List<R>): PagedData<R> {
-        return PagedData.Single { block(runCatching { loadAll() }) }
+        Page(shelves, page.continuation)
     }
 }
 
@@ -56,7 +39,7 @@ private class ShelfPagedData(private val original: PagedData<EchoMediaItem>) : P
  */
 fun PagedData<EchoMediaItem>.toShelfFeed(): Feed<Shelf> {
     return Feed(listOf()) { _ -> 
-        Feed.Data(ShelfPagedData(this))
+        Feed.Data(createShelfPagedData(this))
     }
 }
 
