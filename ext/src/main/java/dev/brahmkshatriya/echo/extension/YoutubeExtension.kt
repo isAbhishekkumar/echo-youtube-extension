@@ -19,6 +19,7 @@ import dev.brahmkshatriya.echo.common.clients.ShareClient
 import dev.brahmkshatriya.echo.common.clients.TrackClient
 import dev.brahmkshatriya.echo.common.clients.TrackerClient
 import dev.brahmkshatriya.echo.common.clients.TrackerMarkClient
+import dev.brahmkshatriya.echo.common.models.TrackDetails
 import dev.brahmkshatriya.echo.common.helpers.ClientException
 import dev.brahmkshatriya.echo.common.helpers.Page
 import dev.brahmkshatriya.echo.common.helpers.PagedData
@@ -31,6 +32,32 @@ import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.loadAll
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeedData
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.pagedDataOfFirst
+
+/**
+ * A PagedData implementation that converts a list of EchoMediaItems to Shelves
+ */
+private class MediaItemsToShelfPagedData(private val mediaItems: PagedData<EchoMediaItem>) : PagedData<Shelf>() {
+    override fun clear() {
+        mediaItems.clear()
+    }
+    
+    override suspend fun loadAllInternal(): List<Shelf> {
+        return mediaItems.loadAll().map { Shelf.Item(it) }
+    }
+    
+    override suspend fun loadListInternal(continuation: String?): Page<Shelf> {
+        val items = mediaItems.loadAll().map { Shelf.Item(it) }
+        return Page(items, null)
+    }
+    
+    override fun invalidate(continuation: String?) {
+        mediaItems.invalidate(continuation)
+    }
+    
+    override fun <R : Any> map(block: suspend (Result<List<Shelf>>) -> List<R>): PagedData<R> {
+        return PagedData.Single { block(runCatching { loadAll() }) }
+    }
+}
 import dev.brahmkshatriya.echo.common.models.Lyrics
 import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.QuickSearchItem
@@ -1624,28 +1651,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                         }.flatten()
                     }.let { mediaItems ->
                         Feed(listOf()) { _ -> 
-                            Feed.Data(object : PagedData<Shelf>() {
-                                override fun clear() {
-                                    mediaItems.clear()
-                                }
-                                
-                                override suspend fun loadAllInternal(): List<Shelf> {
-                                    return mediaItems.loadAll().map { Shelf.Item(it) }
-                                }
-                                
-                                override suspend fun loadListInternal(continuation: String?): Page<Shelf> {
-                                    val items = mediaItems.loadAll().map { Shelf.Item(it) }
-                                    return Page(items, null)
-                                }
-                                
-                                override fun invalidate(continuation: String?) {
-                                    mediaItems.invalidate(continuation)
-                                }
-                                
-                                override fun <R : Any> map(block: suspend (Result<List<Shelf>>) -> List<R>): PagedData<R> {
-                                    return PagedData.Single { block(runCatching { loadAll() }) }
-                                }
-                            })
+                            Feed.Data(MediaItemsToShelfPagedData(mediaItems))
                         }
                     }
                 })
@@ -1689,8 +1695,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val feed = loadFeed(loadedTrack)
             coroutineScope { 
                 if (feed != null) {
-                    val pagedData = Feed.Companion.pagedDataOfFirst(feed)
-                    val items = pagedData.loadAll()
+                    val items = Feed.Companion.loadAll(feed)
                     items.filterIsInstance<Shelf.Category>()
                 } else emptyList()
             }
@@ -1742,7 +1747,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     // Implement LoginClient methods
     // Implements LoginClient
-    override suspend fun onSetLoginUser(user: User?) {
+    override fun setLoginUser(user: User?) {
         if (user == null) {
             api.user_auth_state = null
         } else {
@@ -1772,7 +1777,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
 
     // Implement TrackerMarkClient methods
-    override val markAsPlayedDuration: Long = 30000L
+    override suspend fun getMarkAsPlayedDuration(details: TrackDetails): Long? = 30000L
 
     override suspend fun onMarkAsPlayed(details: TrackDetails) {
         api.user_auth_state?.MarkSongAsWatched?.markSongAsWatched(details.track.id)?.getOrThrow()
@@ -1833,7 +1838,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     // Implement LikeClient methods
     // Implements LikeClient
-    override suspend fun likeTrack(track: Track, isLiked: Boolean) {
+    override suspend fun likeItem(item: EchoMediaItem, shouldLike: Boolean) {
+        val track = item as? Track ?: throw Exception("Only tracks can be liked")
+        likeTrack(track, shouldLike)
+    }
+
+    private suspend fun likeTrack(track: Track, isLiked: Boolean) {
         val likeStatus = if (isLiked) SongLikedStatus.LIKED else SongLikedStatus.NEUTRAL
         withUserAuth { it.SetSongLiked.setSongLiked(track.id, likeStatus).getOrThrow() }
     }
@@ -1844,6 +1854,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                 if (it.id != "VLSE") it.toPlaylist(thumbnailQuality) to false
                 else null
             }
+
         }
 
     override suspend fun editPlaylistMetadata(
@@ -1945,8 +1956,6 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         return NetworkRequest(url = this)
     }
     
-    override fun setLoginUser(user: User?) {}
-    
     override suspend fun onTrackChanged(details: TrackDetails?) {}
     
     override suspend fun onPlayingStateChanged(details: TrackDetails?, isPlaying: Boolean) {}
@@ -1954,10 +1963,6 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     // LikeClient implementation
     override suspend fun isItemLiked(item: EchoMediaItem): Boolean {
         return item.extras["isLiked"]?.toBoolean() ?: false
-    }
-    
-    override suspend fun likeItem(item: EchoMediaItem, shouldLike: Boolean) {
-        // Implement like functionality
     }
     
     // FollowClient implementation
@@ -1970,16 +1975,17 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     }
     
     override suspend fun followItem(item: EchoMediaItem, shouldFollow: Boolean) {
-        // Implement follow functionality
+        when(item) {
+            is Artist -> {
+                val subId = item.extras["subId"] ?: throw Exception("No subId found")
+                withUserAuth { it.SetSubscribedToArtist.setSubscribedToArtist(item.id, shouldFollow, subId) }
+            }
+            else -> throw ClientException.NotSupported("Follow not supported for this media item type")
+        }
     }
     
     // LyricsSearchClient implementation
     override suspend fun searchLyrics(query: String): Feed<Lyrics> {
         return listOf<Lyrics>().toFeed()
-    }
-    
-    // TrackerMarkClient implementation
-    override suspend fun getMarkAsPlayedDuration(details: TrackDetails): Long? {
-        return null
     }
 }
