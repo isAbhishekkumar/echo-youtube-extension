@@ -44,18 +44,6 @@ import dev.brahmkshatriya.echo.common.models.Tab
 import dev.brahmkshatriya.echo.common.models.Track
 import dev.brahmkshatriya.echo.common.models.TrackDetails
 import dev.brahmkshatriya.echo.common.models.User
-
-/**
- * Creates a PagedData<Shelf> from PagedData<EchoMediaItem>
- */
-private fun createShelfPagedDataFromMediaItems(mediaItems: PagedData<EchoMediaItem>): PagedData<Shelf> {
-    return PagedData.Continuous { continuation ->
-        val page = mediaItems.loadPage(continuation)
-        val shelves = page.data.map { item -> Shelf.Item(item) }
-        Page(shelves, page.continuation)
-    }
-}
-import dev.brahmkshatriya.echo.common.models.TrackDetails
 import dev.brahmkshatriya.echo.common.settings.Setting
 import dev.brahmkshatriya.echo.common.settings.SettingSwitch
 import dev.brahmkshatriya.echo.common.settings.Settings
@@ -72,6 +60,7 @@ import dev.brahmkshatriya.echo.extension.endpoints.EchoSongFeedEndpoint
 import dev.brahmkshatriya.echo.extension.endpoints.EchoSongRelatedEndpoint
 import dev.brahmkshatriya.echo.extension.endpoints.EchoVideoEndpoint
 import dev.brahmkshatriya.echo.extension.endpoints.EchoVisitorEndpoint
+import dev.brahmkshatriya.echo.extension.endpoints.GoogleAccountResponse
 import dev.toastbits.ytmkt.impl.youtubei.YoutubeiApi
 import dev.toastbits.ytmkt.impl.youtubei.YoutubeiAuthenticationState
 import dev.toastbits.ytmkt.model.external.PlaylistEditor
@@ -89,6 +78,16 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
 import java.security.MessageDigest
 
+/**
+ * Creates a PagedData<Shelf> from PagedData<EchoMediaItem>
+ */
+private fun createShelfPagedDataFromMediaItems(mediaItems: PagedData<EchoMediaItem>): PagedData<Shelf> {
+    return PagedData.Continuous { continuation ->
+        val page = mediaItems.loadPage(continuation)
+        val shelves = page.data.map { item -> Shelf.Item(item) }
+        Page(shelves, page.continuation)
+    }
+}
 class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFeedClient,
     RadioClient, AlbumClient, ArtistClient, PlaylistClient, LoginClient.WebView,
     TrackerClient, TrackerMarkClient, LibraryFeedClient, ShareClient, LyricsClient, FollowClient,

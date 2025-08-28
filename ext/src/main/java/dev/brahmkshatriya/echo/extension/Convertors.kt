@@ -36,8 +36,7 @@ fun String.toDateFromTimestamp(): Date = Date(this.toLong())
 
 // Extension function to check if a string contains a timestamp
 fun String.containsTimestamp(): Boolean {
-    val regex = Regex("\\d{10,}")
-    return regex.containsMatchIn(this)
+    return Regex("\\d{10,}").containsMatchIn(this)
 }
 
 suspend fun MediaItemLayout.toShelf(
@@ -54,16 +53,18 @@ suspend fun MediaItemLayout.toShelf(
             item.toEchoMediaItem(single, quality)
         },
         more = view_more?.getBrowseParamsData()?.browse_id?.let { id ->
-            val pagedData = PagedData.Single {
+            val pagedData = PagedData.Single<EchoMediaItem> {
                 val rows =
                     api.GenericFeedViewMorePage.getGenericFeedViewMorePage(id).getOrThrow()
                 rows.mapNotNull { itemLayout ->
                     itemLayout.toEchoMediaItem(single, quality)
                 }
             }
-            PagedData.Single {
-                pagedData.loadAll().map { Shelf.Item(it) }
-            }.toFeed()
+            Feed(emptyList()) { _ ->
+                Feed.Data(PagedData.Single<Shelf> {
+                    pagedData.loadAll().map { Shelf.Item(it) }
+                })
+            }
         }
     )
 }
@@ -103,8 +104,9 @@ fun YtmPlaylist.toPlaylist(
         trackCount = item_count?.toLong(),
         duration = total_duration?.toLong(),
         creationDate = year?.let { yearStr -> 
-            if (yearStr.matches(Regex("\\d{10,}"))) Date(yearStr.toLong()) else Date(yearStr.toInt())
+            parseYearString(yearStr)
         },
+
         description = description,
         extras = extras,
     )
@@ -123,10 +125,11 @@ fun YtmPlaylist.toAlbum(
         isExplicit = bool.firstOrNull() ?: false,
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
         artists = artists?.map { it.toArtist(quality) } ?: emptyList(),
-        trackCount = item_count ?: if (single) 1 else null,
+        trackCount = item_count?.toLong() ?: if (single) 1L else null,
         releaseDate = year?.let { yearStr -> 
-            if (yearStr.matches(Regex("\\d{10,}"))) Date(yearStr.toLong()) else Date(yearStr.toInt())
+            parseYearString(yearStr)
         },
+
         label = null,
         duration = total_duration?.toLong(),
         description = description,
@@ -198,6 +201,26 @@ fun User.toArtist(): Artist {
         cover = cover,
         extras = extras
     )
+}
+
+private fun parseYearString(yearValue: Any): Date? {
+    val yearStr = yearValue.toString()
+    return try {
+        // First try to parse as timestamp (long value)
+        if (yearStr.length >= 10 && yearStr.all { it.isDigit() }) {
+            Date(yearStr.toLong())
+        } else {
+            // Otherwise parse as year
+            Date(yearStr.toInt())
+        }
+    } catch (e: Exception) {
+        // If that fails, try just the year
+        try {
+            Date(yearStr.toInt())
+        } catch (e: Exception) {
+            null
+        }
+    }
 }
 
 val json = Json { ignoreUnknownKeys = true }
