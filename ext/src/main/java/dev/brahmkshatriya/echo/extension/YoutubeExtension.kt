@@ -2,21 +2,23 @@ package dev.brahmkshatriya.echo.extension
 
 import dev.brahmkshatriya.echo.common.clients.AlbumClient
 import dev.brahmkshatriya.echo.common.clients.ArtistClient
-import dev.brahmkshatriya.echo.common.clients.ArtistFollowClient
 import dev.brahmkshatriya.echo.common.clients.ExtensionClient
+import dev.brahmkshatriya.echo.common.clients.FollowClient
 import dev.brahmkshatriya.echo.common.clients.HomeFeedClient
 import dev.brahmkshatriya.echo.common.clients.LibraryFeedClient
+import dev.brahmkshatriya.echo.common.clients.LikeClient
 import dev.brahmkshatriya.echo.common.clients.LoginClient
 import dev.brahmkshatriya.echo.common.clients.LyricsClient
+import dev.brahmkshatriya.echo.common.clients.LyricsSearchClient
 import dev.brahmkshatriya.echo.common.clients.PlaylistClient
 import dev.brahmkshatriya.echo.common.clients.PlaylistEditClient
+import dev.brahmkshatriya.echo.common.clients.QuickSearchClient
 import dev.brahmkshatriya.echo.common.clients.RadioClient
 import dev.brahmkshatriya.echo.common.clients.SearchFeedClient
 import dev.brahmkshatriya.echo.common.clients.ShareClient
 import dev.brahmkshatriya.echo.common.clients.TrackClient
-import dev.brahmkshatriya.echo.common.clients.TrackLikeClient
 import dev.brahmkshatriya.echo.common.clients.TrackerClient
-import dev.brahmkshatriya.echo.common.clients.UserClient
+import dev.brahmkshatriya.echo.common.clients.TrackerMarkClient
 import dev.brahmkshatriya.echo.common.helpers.ClientException
 import dev.brahmkshatriya.echo.common.helpers.Page
 import dev.brahmkshatriya.echo.common.helpers.PagedData
@@ -26,15 +28,17 @@ import dev.brahmkshatriya.echo.common.models.Artist
 import dev.brahmkshatriya.echo.common.models.EchoMediaItem
 import dev.brahmkshatriya.echo.common.models.Feed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
+import dev.brahmkshatriya.echo.common.models.Feed.Companion.loadAll
+import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeedData
 import dev.brahmkshatriya.echo.common.models.Lyrics
 import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.QuickSearchItem
 import dev.brahmkshatriya.echo.common.models.Radio
-import dev.brahmkshatriya.echo.common.models.Request
+import dev.brahmkshatriya.echo.common.models.NetworkRequest
 import dev.brahmkshatriya.echo.common.models.NetworkRequest.Companion.toGetRequest
 import dev.brahmkshatriya.echo.common.models.Shelf
 import dev.brahmkshatriya.echo.common.models.Streamable
-import dev.brahmkshatriya.echo.common.models.Streamable.Media.Companion.toServerMedia
+import dev.brahmkshatriya.echo.common.models.Streamable.Media.Companion.toMedia
 import dev.brahmkshatriya.echo.common.models.Tab
 import dev.brahmkshatriya.echo.common.models.Track
 import dev.brahmkshatriya.echo.common.models.TrackDetails
@@ -73,11 +77,11 @@ import kotlinx.serialization.encodeToString
 import java.security.MessageDigest
 
 class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFeedClient,
-    RadioClient, AlbumClient, ArtistClient, UserClient, PlaylistClient, LoginClient.WebView,
-    TrackerClient, LibraryFeedClient, ShareClient, LyricsClient, ArtistFollowClient,
-    TrackLikeClient, PlaylistEditClient {
+    RadioClient, AlbumClient, ArtistClient, PlaylistClient, LoginClient.WebView,
+    TrackerClient, TrackerMarkClient, LibraryFeedClient, ShareClient, LyricsClient, FollowClient,
+    LikeClient, PlaylistEditClient, LyricsSearchClient, QuickSearchClient {
 
-    override val settingItems: List<Setting> = listOf(
+    override suspend fun getSettingItems(): List<Setting> = listOf(
         SettingSwitch(
             "High Thumbnail Quality",
             "high_quality",
@@ -810,7 +814,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         }
         
         return Streamable.Source.Http(
-            finalUrl.toRequest(),
+            finalUrl.toGetRequest(),
             quality = 0 
         )
     }
@@ -920,7 +924,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                                 }
                                                 else -> {
                                                     Streamable.Source.Http(
-                                                        freshUrl.toRequest(),
+                                                        freshUrl.toGetRequest(),
                                                         quality = qualityValue
                                                     )
                                                 }
@@ -1382,7 +1386,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                 }
                 else -> {
                     Streamable.Source.Http(
-                        enhancedVideoUrl.toRequest(),
+                        enhancedVideoUrl.toGetRequest(),
                         quality = 1000000 
                     )
                 }
@@ -1527,8 +1531,8 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         }
     }
 
-    override fun loadTracks(radio: Radio) =
-        PagedData.Single { json.decodeFromString<List<Track>>(radio.extras["tracks"]!!) }
+    override suspend fun loadTracks(radio: Radio): Feed<Track> =
+        PagedData.Single { json.decodeFromString<List<Track>>(radio.extras["tracks"]!!) }.toFeed()
 
     override suspend fun radio(album: Album): Radio {
         val track = api.LoadPlaylist.loadPlaylist(album.id).getOrThrow().items
@@ -1592,7 +1596,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         return ytmPlaylist.toAlbum(false, HIGH)
     }
 
-    override fun loadTracks(album: Album): PagedData<Track> = trackMap[album.id]!!
+    override suspend fun loadTracks(album: Album): Feed<Track>? = trackMap[album.id]?.toFeed()
 
     private suspend fun getArtistMediaItems(artist: Artist): List<Shelf> {
         val result =
@@ -1671,7 +1675,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         return ytmPlaylist.toPlaylist(HIGH, related)
     }
 
-    override fun loadTracks(playlist: Playlist): PagedData<Track> = trackMap[playlist.id]!!
+    override suspend fun loadTracks(playlist: Playlist): Feed<Track> = trackMap[playlist.id]?.toFeed() ?: listOf<Track>().toFeed()
 
 
     override val webViewRequest = object : WebViewRequest.Cookie<List<User>> {
@@ -1852,28 +1856,53 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         )
     }
 
-    override fun searchTrackLyrics(clientId: String, track: Track) = PagedData.Single {
-        val lyricsId = track.extras["lyricsId"] ?: return@Single listOf()
-        val data = lyricsEndPoint.getLyrics(lyricsId) ?: return@Single listOf()
-        val lyrics = data.first.map {
-            it.cueRange.run {
-                Lyrics.Item(
-                    it.lyricLine,
-                    startTimeMilliseconds.toLong(),
-                    endTimeMilliseconds.toLong()
-                )
+    override suspend fun searchTrackLyrics(clientId: String, track: Track): Feed<Lyrics> {
+        val pagedData = PagedData.Single {
+            val lyricsId = track.extras["lyricsId"] ?: return@Single listOf()
+            val data = lyricsEndPoint.getLyrics(lyricsId) ?: return@Single listOf()
+            val lyrics = data.first.map {
+                it.cueRange.run {
+                    Lyrics.Item(
+                        it.lyricLine,
+                        startTimeMilliseconds.toLong(),
+                        endTimeMilliseconds.toLong()
+                    )
+                }
             }
+            listOf(Lyrics(lyricsId, track.title, data.second, Lyrics.Timed(lyrics)))
         }
-        listOf(Lyrics(lyricsId, track.title, data.second, Lyrics.Timed(lyrics)))
+        return pagedData.toFeed()
     }
 
     override suspend fun loadLyrics(lyrics: Lyrics) = lyrics
 
     override suspend fun onShare(item: EchoMediaItem) = when (item) {
-        is EchoMediaItem.Lists.AlbumItem -> "https://music.youtube.com/browse/${item.id}"
-        is EchoMediaItem.Lists.PlaylistItem -> "https://music.youtube.com/playlist?list=${item.id}"
-        is EchoMediaItem.Lists.RadioItem -> "https://music.youtube.com/playlist?list=${item.id}"
-        is EchoMediaItem.Profile.ArtistItem -> "https://music.youtube.com/channel/${item.id}"
+        is Album -> "https://music.youtube.com/browse/${item.id}"
+        is Playlist -> "https://music.youtube.com/playlist?list=${item.id}"
+        is Radio -> "https://music.youtube.com/playlist?list=${item.id}"
+        is Artist -> "https://music.youtube.com/channel/${item.id}"
+        is Track -> "https://music.youtube.com/watch?v=${item.id}"
+        else -> throw ClientException("Unsupported media item type for sharing")
+    }
+    
+    // Required method implementations to satisfy the interface
+    override suspend fun radio(item: EchoMediaItem, context: EchoMediaItem?): Radio {
+        return when(item) {
+            is Track -> radio(item)
+            is Album -> radio(item)
+            is Artist -> radio(item)
+            is Playlist -> radio(item)
+            else -> throw ClientException("Radio not supported for this media item")
+        }
+    }
+    
+    override suspend fun loadRadio(radio: Radio): Radio = radio
+    
+    override suspend fun setLoginUser(user: User?) {}
+    
+    override suspend fun onTrackChanged(details: TrackDetails?) {}
+    
+    override suspend fun onPlayingStateChanged(details: TrackDetails?, isPlaying: Boolean) {}
         is EchoMediaItem.Profile.UserItem -> "https://music.youtube.com/channel/${item.id}"
         is EchoMediaItem.TrackItem -> "https://music.youtube.com/watch?v=${item.id}"
     }
