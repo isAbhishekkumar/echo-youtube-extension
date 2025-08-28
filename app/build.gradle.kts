@@ -99,6 +99,7 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
+                "additional-proguard-rules.pro",
                 generatedProguard.absolutePath
             )
         }

@@ -195,12 +195,8 @@ fun YtmArtist.toUser(
 }
 
 fun User.toArtist(): Artist {
-    return Artist(
-        id = id,
-        name = name,
-        cover = cover,
-        extras = extras
-    )
+    // Use the helper class to ensure proper conversion
+    return UserToArtistHelper.safeConvertUserToArtist(this)
 }
 
 private fun parseYearString(yearValue: Any): Date? {

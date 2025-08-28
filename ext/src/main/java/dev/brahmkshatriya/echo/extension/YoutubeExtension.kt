@@ -1582,7 +1582,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         )
     }
 
-    suspend fun radio(user: User) = radio(user.toArtist())
+    suspend fun radio(user: User) = radio(UserToArtistHelper.safeConvertUserToArtist(user))
 
     suspend fun radio(playlist: Playlist): Radio {
         val track = loadTracks(playlist)?.loadAll()?.lastOrNull()
@@ -1647,10 +1647,11 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         return Feed(emptyList()) { _ -> PagedData.Single { shelves }.toFeedData() }
     }
 
-    // No longer needed: override suspend fun loadFeed(user: User): Feed<Shelf>? = loadFeed(user.toArtist())
-
-    // No longer needed: override suspend fun loadUser(user: User): User {
-    //    loadArtist(user.toArtist())
+    // Note: We now use the UserToArtistHelper to safely convert User objects to Artists
+    // These methods are no longer needed and could cause casting issues:
+    // override suspend fun loadFeed(user: User): Feed<Shelf>? = loadFeed(UserToArtistHelper.safeConvertUserToArtist(user))
+    // override suspend fun loadUser(user: User): User {
+    //    loadArtist(UserToArtistHelper.safeConvertUserToArtist(user))
     //    return loadedArtist!!.toUser(HIGH)
     //}
 

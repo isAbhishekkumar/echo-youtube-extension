@@ -38,3 +38,15 @@
 
 # Keep extension interfaces
 -keep interface dev.brahmkshatriya.echo.common.clients.** { *; }
+
+# Keep model classes and their inheritance relationships
+-keep class dev.brahmkshatriya.echo.common.models.** { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.common.models.** { *; }
+-keepattributes InnerClasses
+
+# Fix for User to Artist conversion issues
+-keep class dev.brahmkshatriya.echo.common.models.User { *; }
+-keep class dev.brahmkshatriya.echo.common.models.Artist { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.extension.Convertors {
+    public static dev.brahmkshatriya.echo.common.models.Artist toArtist(dev.brahmkshatriya.echo.common.models.User);
+}
