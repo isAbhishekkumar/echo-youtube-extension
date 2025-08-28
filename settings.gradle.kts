@@ -14,9 +14,13 @@ dependencyResolutionManagement {
         mavenCentral()
         maven { url = uri("https://jitpack.io") }
     }
+    versionCatalogs {
+        create("libs") {
+            from(files("gradle/libs.versions.toml"))
+        }
+    }
 }
 
-val extName: String by settings
-rootProject.name = extName
+rootProject.name = "echo-youtube-extension"
 include(":app")
 include(":ext")

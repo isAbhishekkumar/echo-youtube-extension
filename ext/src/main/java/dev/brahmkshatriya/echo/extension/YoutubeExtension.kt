@@ -24,6 +24,7 @@ import dev.brahmkshatriya.echo.common.helpers.WebViewRequest
 import dev.brahmkshatriya.echo.common.models.Album
 import dev.brahmkshatriya.echo.common.models.Artist
 import dev.brahmkshatriya.echo.common.models.EchoMediaItem
+import dev.brahmkshatriya.echo.common.models.Feed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.Lyrics
 import dev.brahmkshatriya.echo.common.models.Playlist
@@ -580,17 +581,21 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             ".googlevideo.com"
         )
     }
-    override suspend fun getHomeTabs() = listOf<Tab>()
-    override fun getHomeFeed(tab: Tab?) = PagedData.Continuous {
-        val continuation = it
-        val result = songFeedEndPoint.getSongFeed(
-            params = null, continuation = continuation
-        ).getOrThrow()
-        val data = result.layouts.map { itemLayout ->
-            itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+    override suspend fun loadHomeFeed(): Feed<Shelf> {
+        val tabs = listOf<Tab>() // YouTube home doesn't have tabs currently
+        return Feed(tabs) { tab ->
+            val pagedData = PagedData.Continuous { continuation ->
+                val result = songFeedEndPoint.getSongFeed(
+                    params = tab?.id, continuation = continuation
+                ).getOrThrow()
+                val data = result.layouts.map { itemLayout ->
+                    itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                }
+                Page(data, result.ctoken)
+            }
+            Feed.Data(pagedData)
         }
-        Page(data, result.ctoken)
-    }.toFeed()
+    }
     private fun detectNetworkType(): String {
         return try {
             val testConnection = java.net.URL("https://www.google.com").openConnection() as java.net.HttpURLConnection
@@ -1462,48 +1467,60 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
 
     private var oldSearch: Pair<String, List<Shelf>>? = null
-    override fun searchFeed(query: String, tab: Tab?) = if (query.isNotBlank()) PagedData.Single {
-        val old = oldSearch?.takeIf {
-            it.first == query && (tab == null || tab.id == "All")
-        }?.second
-        if (old != null) return@Single old
-        val search = api.Search.search(query, tab?.id).getOrThrow()
-        search.categories.map { (itemLayout, _) ->
-            itemLayout.items.mapNotNull { item ->
-                item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
-            }
-        }.flatten()
-    }.toFeed() else if (tab != null) PagedData.Continuous {
-        val params = tab.id
-        val continuation = it
-        val result = songFeedEndPoint.getSongFeed(
-            params = params, continuation = continuation
-        ).getOrThrow()
-        val data = result.layouts.map { itemLayout ->
-            itemLayout.toShelf(api, SINGLES, thumbnailQuality)
-        }
-        Page(data, result.ctoken)
-    }.toFeed() else PagedData.Single<Shelf> { listOf() }.toFeed()
-
-    override suspend fun searchTabs(query: String): List<Tab> {
-        if (query.isNotBlank()) {
+    
+    override suspend fun loadSearchFeed(query: String): Feed<Shelf> {
+        val tabs = if (query.isNotBlank()) {
+            // Get search tabs for the query
             val search = api.Search.search(query, null).getOrThrow()
             oldSearch = query to search.categories.map { (itemLayout, _) ->
                 itemLayout.toShelf(api, SINGLES, thumbnailQuality)
             }
-            val tabs = search.categories.mapNotNull { (item, filter) ->
+            val searchTabs = search.categories.mapNotNull { (item, filter) ->
                 filter?.let {
-                    Tab(
-                        it.params, item.title?.getString(language) ?: "???"
-                    )
+                    Tab(it.params, item.title?.getString(language) ?: "???")
                 }
             }
-            return listOf(Tab("All", "All")) + tabs
+            listOf(Tab("All", "All")) + searchTabs
         } else {
             val result = songFeedEndPoint.getSongFeed().getOrThrow()
-            return result.filter_chips?.map {
+            result.filter_chips?.map {
                 Tab(it.params, it.text.getString(language))
             } ?: emptyList()
+        }
+
+        return Feed(tabs) { tab ->
+            val pagedData = if (query.isNotBlank() && (tab == null || tab.id == "All")) {
+                // For search with query and "All" tab
+                PagedData.Single {
+                    val old = oldSearch?.takeIf { it.first == query }?.second
+                    if (old != null) return@Single old
+                    
+                    val search = api.Search.search(query, tab?.id).getOrThrow()
+                    search.categories.map { (itemLayout, _) ->
+                        itemLayout.items.mapNotNull { item ->
+                            item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
+                        }
+                    }.flatten()
+                }
+            } else if (tab != null) {
+                // For tab-based search
+                PagedData.Continuous {
+                    val params = tab.id
+                    val continuation = it
+                    val result = songFeedEndPoint.getSongFeed(
+                        params = params, continuation = continuation
+                    ).getOrThrow()
+                    val data = result.layouts.map { itemLayout ->
+                        itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                    }
+                    Page(data, result.ctoken)
+                }
+            } else {
+                // Empty result
+                PagedData.Single { listOf() }
+            }
+            
+            Feed.Data(pagedData)
         }
     }
 
@@ -1707,16 +1724,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         api.user_auth_state?.MarkSongAsWatched?.markSongAsWatched(details.track.id)?.getOrThrow()
     }
 
-    override suspend fun getLibraryTabs() = listOf(
-        Tab("FEmusic_library_landing", "All"),
-        Tab("FEmusic_history", "History"),
-        Tab("FEmusic_liked_playlists", "Playlists"),
-//        Tab("FEmusic_listening_review", "Review"),
-        Tab("FEmusic_liked_videos", "Songs"),
-        Tab("FEmusic_library_corpus_track_artists", "Artists")
-    )
-
-    private suspend fun <T> withUserAuth(
+        private suspend fun <T> withUserAuth(
         block: suspend (auth: YoutubeiAuthenticationState) -> T
     ): T {
         val state = api.user_auth_state
@@ -1733,14 +1741,28 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         }
     }
 
-    override fun getLibraryFeed(tab: Tab?) = PagedData.Continuous<Shelf> { cont ->
-        val browseId = tab?.id ?: "FEmusic_library_landing"
-        val (result, ctoken) = withUserAuth { libraryEndPoint.loadLibraryFeed(browseId, cont) }
-        val data = result.mapNotNull { playlist ->
-            playlist.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
+    override suspend fun loadLibraryFeed(): Feed<Shelf> {
+        val tabs = listOf(
+            Tab("FEmusic_library_landing", "All"),
+            Tab("FEmusic_history", "History"),
+            Tab("FEmusic_liked_playlists", "Playlists"),
+//            Tab("FEmusic_listening_review", "Review"),
+            Tab("FEmusic_liked_videos", "Songs"),
+            Tab("FEmusic_library_corpus_track_artists", "Artists")
+        )
+        
+        return Feed(tabs) { tab ->
+            val pagedData = PagedData.Continuous<Shelf> { cont ->
+                val browseId = tab?.id ?: "FEmusic_library_landing"
+                val (result, ctoken) = withUserAuth { libraryEndPoint.loadLibraryFeed(browseId, cont) }
+                val data = result.mapNotNull { playlist ->
+                    playlist.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
+                }
+                Page(data, ctoken)
+            }
+            Feed.Data(pagedData)
         }
-        Page(data, ctoken)
-    }.toFeed()
+    }
 
     override suspend fun createPlaylist(title: String, description: String?): Playlist {
         val playlistId = withUserAuth {
