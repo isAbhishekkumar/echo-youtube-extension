@@ -2,11 +2,23 @@ package dev.brahmkshatriya.echo.extension
 
 import dev.brahmkshatriya.echo.common.helpers.PagedData
 import dev.brahmkshatriya.echo.common.models.Album
-import dev.brahmkshatriya.echo.common.models.Artist
+import dev.brahmkshatriya.echo.commo// String to NetworkRequest extension function
+fun String.toRequest(headers: Map<String, String> = emptyMap()): NetworkRequest {
+    return NetworkRequest(this, headers)
+}
+
+suspend fun HttpResponse.getUsers(
+    cookie: String,
+    auth: String
+) = bodyAsText().let {
+    val trimmed = it.substringAfter(")}]'}")
+    json.decodeFromString<GoogleAccountResponse>(trimmed)
+}.getUsers(cookie, auth)s.Artist
 import dev.brahmkshatriya.echo.common.models.Date
 import dev.brahmkshatriya.echo.common.models.EchoMediaItem
 import dev.brahmkshatriya.echo.common.models.ImageHolder
 import dev.brahmkshatriya.echo.common.models.ImageHolder.Companion.toImageHolder
+import dev.brahmkshatriya.echo.common.models.NetworkRequest
 import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.Shelf
 import dev.brahmkshatriya.echo.common.models.Track
@@ -28,6 +40,9 @@ import kotlinx.serialization.json.Json
 // Extension function to create a Date object from a string year
 fun String.toDate() = Date(this.toInt())
 
+// Extension function to create a Date from a string containing a timestamp
+fun String.toDateFromTimestamp() = Date(this.toLong())
+
 suspend fun MediaItemLayout.toShelf(
     api: YoutubeiApi,
     language: String,
@@ -42,14 +57,16 @@ suspend fun MediaItemLayout.toShelf(
             item.toEchoMediaItem(single, quality)
         },
         more = view_more?.getBrowseParamsData()?.browse_id?.let { id ->
-            val pagedData = PagedData.Single {
-                val rows =
-                    api.GenericFeedViewMorePage.getGenericFeedViewMorePage(id).getOrThrow()
-                rows.mapNotNull { itemLayout ->
-                    itemLayout.toEchoMediaItem(single, quality)
+            }.let {
+                val pagedData = PagedData.Single {
+                    val rows =
+                        api.GenericFeedViewMorePage.getGenericFeedViewMorePage(id).getOrThrow()
+                    rows.mapNotNull { itemLayout ->
+                        itemLayout.toEchoMediaItem(single, quality)
+                    }
                 }
+                Feed(listOf()) { _ -> Feed.Data(pagedData) }
             }
-            pagedData.toFeed()
         }
     )
 }
@@ -88,7 +105,7 @@ fun YtmPlaylist.toPlaylist(
         authors = artists?.map { it.toUser(quality) } as? List<Artist> ?: emptyList(),
         trackCount = item_count?.toLong(),
         duration = total_duration?.toLong(),
-        creationDate = year?.toDate(),
+        creationDate = year?.let { if (it.contains(Regex("\\d{10,}"))) it.toDateFromTimestamp() else it.toDate() },
         description = description,
         extras = extras,
     )
@@ -108,7 +125,7 @@ fun YtmPlaylist.toAlbum(
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
         artists = artists?.map { it.toArtist(quality) } ?: emptyList(),
         trackCount = item_count ?: if (single) 1 else null,
-        releaseDate = year?.toDate(),
+        releaseDate = year?.let { if (it.contains(Regex("\\d{10,}"))) it.toDateFromTimestamp() else it.toDate() },
         label = null,
         duration = total_duration,
         description = description,

@@ -30,12 +30,17 @@ import dev.brahmkshatriya.echo.common.models.Feed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.loadAll
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeedData
+
+// Extension function to load Feed data
+suspend fun <T : Any> Feed<T>.load() = this.loadAll()
 import dev.brahmkshatriya.echo.common.models.Lyrics
 import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.QuickSearchItem
 import dev.brahmkshatriya.echo.common.models.Radio
 import dev.brahmkshatriya.echo.common.models.NetworkRequest
 import dev.brahmkshatriya.echo.common.models.NetworkRequest.Companion.toGetRequest
+import dev.brahmkshatriya.echo.extension.toRequest
+import dev.brahmkshatriya.echo.extension.toShelfFeed
 import dev.brahmkshatriya.echo.common.models.Shelf
 import dev.brahmkshatriya.echo.common.models.Streamable
 import dev.brahmkshatriya.echo.common.models.Streamable.Media.Companion.toMedia
@@ -1621,7 +1626,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                 item.toEchoMediaItem(single, thumbnailQuality)
                             }
                         }.flatten()
-                    }.toFeed()
+                    }.toShelfFeed()
                 })
         } ?: emptyList()
     }
@@ -1949,6 +1954,5 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     // TrackerMarkClient implementation
     override suspend fun getMarkAsPlayedDuration(details: TrackDetails): Long? {
         return null
-    }
     }
 }
