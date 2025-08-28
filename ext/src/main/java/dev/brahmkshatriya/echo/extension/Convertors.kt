@@ -6,6 +6,7 @@ import dev.brahmkshatriya.echo.common.models.Artist
 import dev.brahmkshatriya.echo.common.models.Date
 import dev.brahmkshatriya.echo.common.models.EchoMediaItem
 import dev.brahmkshatriya.echo.common.models.Feed
+import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.ImageHolder
 import dev.brahmkshatriya.echo.common.models.ImageHolder.Companion.toImageHolder
 import dev.brahmkshatriya.echo.common.models.NetworkRequest
@@ -96,7 +97,9 @@ fun YtmPlaylist.toPlaylist(
         authors = artists?.map { it.toUser(quality) } as? List<Artist> ?: emptyList(),
         trackCount = item_count?.toLong(),
         duration = total_duration?.toLong(),
-        creationDate = year?.let { if (it.containsTimestamp()) it.toDateFromTimestamp() else it.toDate() },
+        creationDate = year?.let { yearStr -> 
+            if (yearStr.contains(Regex("\\d{10,}"))) Date(yearStr.toLong()) else Date(yearStr.toInt())
+        },
         description = description,
         extras = extras,
     )
@@ -116,7 +119,9 @@ fun YtmPlaylist.toAlbum(
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
         artists = artists?.map { it.toArtist(quality) } ?: emptyList(),
         trackCount = item_count ?: if (single) 1 else null,
-        releaseDate = year?.let { if (it.containsTimestamp()) it.toDateFromTimestamp() else it.toDate() },
+        releaseDate = year?.let { yearStr -> 
+            if (yearStr.contains(Regex("\\d{10,}"))) Date(yearStr.toLong()) else Date(yearStr.toInt())
+        },
         label = null,
         duration = total_duration?.toLong(),
         description = description,

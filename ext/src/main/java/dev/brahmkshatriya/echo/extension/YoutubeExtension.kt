@@ -30,6 +30,7 @@ import dev.brahmkshatriya.echo.common.models.Feed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeed
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.loadAll
 import dev.brahmkshatriya.echo.common.models.Feed.Companion.toFeedData
+import dev.brahmkshatriya.echo.common.models.Feed.Companion.pagedDataOfFirst
 import dev.brahmkshatriya.echo.common.models.Lyrics
 import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.QuickSearchItem
@@ -1687,10 +1688,11 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val loadedTrack = loadTrack(track, false)
             val feed = loadFeed(loadedTrack)
             coroutineScope { 
-                feed?.getPagedData(null)?.pagedData?.let { pagedData ->
-                    val page = pagedData.load(null)
-                    page.data.filterIsInstance<Shelf.Category>()
-                } ?: emptyList()
+                if (feed != null) {
+                    val pagedData = Feed.Companion.pagedDataOfFirst(feed)
+                    val items = pagedData.loadAll()
+                    items.filterIsInstance<Shelf.Category>()
+                } else emptyList()
             }
         } else {
             val continuation = songRelatedEndpoint.loadFromPlaylist(cont).getOrThrow()
@@ -1740,7 +1742,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     // Implement LoginClient methods
     // Implements LoginClient
-    override fun onSetLoginUser(user: User?) {
+    override suspend fun onSetLoginUser(user: User?) {
         if (user == null) {
             api.user_auth_state = null
         } else {
@@ -1770,7 +1772,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
 
     // Implement TrackerMarkClient methods
-    override fun markAsPlayedDuration(): Long = 30000L
+    override val markAsPlayedDuration: Long = 30000L
 
     override suspend fun onMarkAsPlayed(details: TrackDetails) {
         api.user_auth_state?.MarkSongAsWatched?.markSongAsWatched(details.track.id)?.getOrThrow()
@@ -1831,7 +1833,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     // Implement LikeClient methods
     // Implements LikeClient
-    override fun likeTrack(track: Track, isLiked: Boolean) {
+    override suspend fun likeTrack(track: Track, isLiked: Boolean) {
         val likeStatus = if (isLiked) SongLikedStatus.LIKED else SongLikedStatus.NEUTRAL
         withUserAuth { it.SetSongLiked.setSongLiked(track.id, likeStatus).getOrThrow() }
     }
