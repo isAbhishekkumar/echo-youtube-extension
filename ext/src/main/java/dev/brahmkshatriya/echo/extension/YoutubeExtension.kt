@@ -1454,7 +1454,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     override suspend fun loadFeed(track: Track): Feed<Shelf>? {
         val shelves = loadRelated(track)
-        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
+        return Feed(emptyList()) { _ -> PagedData.Single { shelves }.toFeedData() }
     }
 
     override suspend fun deleteQuickSearch(item: QuickSearchItem) {
@@ -1527,21 +1527,21 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                 PagedData.Single { listOf() }
             }
             
-            Feed.Data(pagedData)
+            Feed.Data(pagedData as PagedData<Shelf>)
         }
     }
 
     override suspend fun loadTracks(radio: Radio): Feed<Track> =
         PagedData.Single { json.decodeFromString<List<Track>>(radio.extras["tracks"]!!) }.toFeed()
 
-    override suspend fun radio(album: Album): Radio {
+    suspend fun radio(album: Album): Radio {
         val track = api.LoadPlaylist.loadPlaylist(album.id).getOrThrow().items
             ?.lastOrNull()?.toTrack(HIGH)
             ?: throw Exception("No tracks found")
         return radio(track, null)
     }
 
-    override suspend fun radio(artist: Artist): Radio {
+    suspend fun radio(artist: Artist): Radio {
         val id = "radio_${artist.id}"
         val result = api.ArtistRadio.getArtistRadio(artist.id, null).getOrThrow()
         val tracks = result.items.map { song -> song.toTrack(thumbnailQuality) }
@@ -1555,7 +1555,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     }
 
 
-    override suspend fun radio(track: Track, context: EchoMediaItem?): Radio {
+    suspend fun radio(track: Track, context: EchoMediaItem? = null): Radio {
         val id = "radio_${track.id}"
         val cont = context?.extras?.get("cont")
         val result = api.SongRadio.getSongRadio(track.id, cont).getOrThrow()
@@ -1570,10 +1570,10 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         )
     }
 
-    override suspend fun radio(user: User) = radio(user.toArtist())
+    suspend fun radio(user: User) = radio(user.toArtist())
 
-    override suspend fun radio(playlist: Playlist): Radio {
-        val track = loadTracks(playlist).loadAll().lastOrNull()
+    suspend fun radio(playlist: Playlist): Radio {
+        val track = loadTracks(playlist)?.loadAll()?.lastOrNull()
             ?: throw Exception("No tracks found")
         return radio(track, null)
     }
@@ -1583,7 +1583,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         val lastTrack = tracks.lastOrNull() ?: return null
         val loadedTrack = loadTrack(lastTrack, false)
         val shelves = loadRelated(loadedTrack)
-        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
+        return Feed(emptyList()) { _ -> PagedData.Single { shelves }.toFeedData() }
     }
 
 
@@ -1621,27 +1621,31 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                 item.toEchoMediaItem(single, thumbnailQuality)
                             }
                         }.flatten()
-                    }
+                    }.toFeed()
                 })
         } ?: emptyList()
     }
 
     override suspend fun loadFeed(artist: Artist): Feed<Shelf> {
         val shelves = getArtistMediaItems(artist)
-        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
+        return Feed(emptyList()) { _ -> PagedData.Single { shelves }.toFeedData() }
     }
 
-    override suspend fun loadFeed(user: User): Feed<Shelf>? = loadFeed(user.toArtist())
+    // No longer needed: override suspend fun loadFeed(user: User): Feed<Shelf>? = loadFeed(user.toArtist())
 
-    override suspend fun loadUser(user: User): User {
-        loadArtist(user.toArtist())
-        return loadedArtist!!.toUser(HIGH)
-    }
+    // No longer needed: override suspend fun loadUser(user: User): User {
+    //    loadArtist(user.toArtist())
+    //    return loadedArtist!!.toUser(HIGH)
+    //}
 
-    override suspend fun followArtist(artist: Artist, follow: Boolean) {
+    // This is now handled by followItem method
+    // The code below was part of the followArtist implementation which is now handled by followItem
+    /* 
+    suspend fun followArtist(artist: Artist, follow: Boolean) {
         val subId = artist.extras["subId"] ?: throw Exception("No subId found")
         withUserAuth { it.SetSubscribedToArtist.setSubscribedToArtist(artist.id, follow, subId) }
     }
+    */
 
     private var loadedArtist: YtmArtist? = null
     override suspend fun loadArtist(artist: Artist): Artist {
@@ -1657,7 +1661,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val track = Track(id, "")
             val loadedTrack = loadTrack(track, false)
             val feed = loadFeed(loadedTrack)
-            feed?.getPagedData(null)?.pagedData?.load(null)?.data?.filterIsInstance<Shelf.Category>() ?: emptyList()
+            coroutineScope { 
+                feed?.getPagedData(null)?.pagedData?.let {
+                    val page = it.load(null)
+                    page.data.filterIsInstance<Shelf.Category>()
+                } ?: emptyList()
+            }
         } else {
             val continuation = songRelatedEndpoint.loadFromPlaylist(cont).getOrThrow()
             continuation.map { it.toShelf(api, language, thumbnailQuality) }
@@ -1883,7 +1892,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         is Radio -> "https://music.youtube.com/playlist?list=${item.id}"
         is Artist -> "https://music.youtube.com/channel/${item.id}"
         is Track -> "https://music.youtube.com/watch?v=${item.id}"
-        else -> throw ClientException("Unsupported media item type for sharing")
+        else -> throw ClientException.NotSupported("Unsupported media item type for sharing")
     }
     
     // Required method implementations to satisfy the interface
@@ -1899,7 +1908,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     
     override suspend fun loadRadio(radio: Radio): Radio = radio
     
-    override suspend fun setLoginUser(user: User?) {}
+    // Helper method to convert URL to NetworkRequest
+    private fun String.toGetRequest(): NetworkRequest {
+        return NetworkRequest(url = this)
+    }
+    
+    override fun setLoginUser(user: User?) {}
     
     override suspend fun onTrackChanged(details: TrackDetails?) {}
     

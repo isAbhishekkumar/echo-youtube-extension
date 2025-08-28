@@ -26,7 +26,7 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 
 // Extension function to create a Date object from a string year
-fun String.toDate() = Date.Companion.Int.toYearDate(this.toInt())
+fun String.toDate() = Date(this.toInt())
 
 suspend fun MediaItemLayout.toShelf(
     api: YoutubeiApi,
@@ -42,13 +42,14 @@ suspend fun MediaItemLayout.toShelf(
             item.toEchoMediaItem(single, quality)
         },
         more = view_more?.getBrowseParamsData()?.browse_id?.let { id ->
-            PagedData.Single {
+            val pagedData = PagedData.Single {
                 val rows =
                     api.GenericFeedViewMorePage.getGenericFeedViewMorePage(id).getOrThrow()
                 rows.mapNotNull { itemLayout ->
                     itemLayout.toEchoMediaItem(single, quality)
                 }
             }
+            pagedData.toFeed()
         }
     )
 }
