@@ -76,9 +76,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.encodeToString
 import java.security.MessageDigest
 
-// Extension function to load Feed data
-suspend fun <T : Any> Feed<T>.load(): List<T> = this.loadAll()
-
 class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFeedClient,
     RadioClient, AlbumClient, ArtistClient, PlaylistClient, LoginClient.WebView,
     TrackerClient, TrackerMarkClient, LibraryFeedClient, ShareClient, LyricsClient, FollowClient,
