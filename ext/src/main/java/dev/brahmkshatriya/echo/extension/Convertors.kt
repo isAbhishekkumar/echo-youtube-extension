@@ -28,10 +28,13 @@ import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
 
 // Extension function to create a Date object from a string year
-fun String.toDate() = Date(this.toInt())
+fun String.toDate(): Date = Date(this.toInt())
 
 // Extension function to create a Date from a string containing a timestamp
-fun String.toDateFromTimestamp() = Date(this.toLong())
+fun String.toDateFromTimestamp(): Date = Date(this.toLong())
+
+// Extension function to check if a string contains a timestamp
+fun String.containsTimestamp(): Boolean = this.contains(Regex("\\d{10,}"))
 
 suspend fun MediaItemLayout.toShelf(
     api: YoutubeiApi,
@@ -93,7 +96,7 @@ fun YtmPlaylist.toPlaylist(
         authors = artists?.map { it.toUser(quality) } as? List<Artist> ?: emptyList(),
         trackCount = item_count?.toLong(),
         duration = total_duration?.toLong(),
-        creationDate = year?.let { if (it.contains(Regex("\\d{10,}"))) it.toDateFromTimestamp() else it.toDate() },
+        creationDate = year?.let { if (it.containsTimestamp()) it.toDateFromTimestamp() else it.toDate() },
         description = description,
         extras = extras,
     )
@@ -113,7 +116,7 @@ fun YtmPlaylist.toAlbum(
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
         artists = artists?.map { it.toArtist(quality) } ?: emptyList(),
         trackCount = item_count ?: if (single) 1 else null,
-        releaseDate = year?.let { if (it.contains(Regex("\\d{10,}"))) it.toDateFromTimestamp() else it.toDate() },
+        releaseDate = year?.let { if (it.containsTimestamp()) it.toDateFromTimestamp() else it.toDate() },
         label = null,
         duration = total_duration,
         description = description,
