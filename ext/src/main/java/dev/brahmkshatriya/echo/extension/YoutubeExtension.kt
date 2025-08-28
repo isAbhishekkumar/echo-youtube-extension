@@ -1623,11 +1623,27 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                         }.flatten()
                     }.let { mediaItems ->
                         Feed(listOf()) { _ -> 
-                            Feed.Data(PagedData.Continuous { continuation ->
-                                val shelves = mediaItems.map { item ->
-                                    Shelf.Item(item)
+                            Feed.Data(object : PagedData<Shelf>() {
+                                override fun clear() {
+                                    mediaItems.clear()
                                 }
-                                PagedData.Page(shelves, null)
+                                
+                                override suspend fun loadAllInternal(): List<Shelf> {
+                                    return mediaItems.loadAll().map { Shelf.Item(it) }
+                                }
+                                
+                                override suspend fun loadListInternal(continuation: String?): Page<Shelf> {
+                                    val items = mediaItems.loadAll().map { Shelf.Item(it) }
+                                    return Page(items, null)
+                                }
+                                
+                                override fun invalidate(continuation: String?) {
+                                    mediaItems.invalidate(continuation)
+                                }
+                                
+                                override fun <R : Any> map(block: suspend (Result<List<Shelf>>) -> List<R>): PagedData<R> {
+                                    return PagedData.Single { block(runCatching { loadAll() }) }
+                                }
                             })
                         }
                     }
@@ -1724,7 +1740,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     // Implement LoginClient methods
     // Implements LoginClient
-    override suspend fun onSetLoginUser(user: User?) {
+    override fun onSetLoginUser(user: User?) {
         if (user == null) {
             api.user_auth_state = null
         } else {
@@ -1754,7 +1770,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
 
     // Implement TrackerMarkClient methods
-    override val markAsPlayedDuration: Long = 30000L
+    override fun markAsPlayedDuration(): Long = 30000L
 
     override suspend fun onMarkAsPlayed(details: TrackDetails) {
         api.user_auth_state?.MarkSongAsWatched?.markSongAsWatched(details.track.id)?.getOrThrow()
@@ -1815,7 +1831,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     // Implement LikeClient methods
     // Implements LikeClient
-    override suspend fun likeTrack(track: Track, isLiked: Boolean) {
+    override fun likeTrack(track: Track, isLiked: Boolean) {
         val likeStatus = if (isLiked) SongLikedStatus.LIKED else SongLikedStatus.NEUTRAL
         withUserAuth { it.SetSongLiked.setSongLiked(track.id, likeStatus).getOrThrow() }
     }

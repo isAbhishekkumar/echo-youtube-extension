@@ -7,13 +7,6 @@ import dev.brahmkshatriya.echo.common.models.NetworkRequest
 import dev.brahmkshatriya.echo.common.models.Shelf
 
 /**
- * Extension function to create a Feed from a PagedData
- */
-fun <T : Any> PagedData<T>.toFeed(): Feed<T> {
-    return Feed(listOf()) { _ -> Feed.Data(this) }
-}
-
-/**
  * Extension function to convert String to NetworkRequest
  */
 fun String.toRequest(headers: Map<String, String> = emptyMap()): NetworkRequest {
@@ -24,10 +17,7 @@ fun String.toRequest(headers: Map<String, String> = emptyMap()): NetworkRequest 
  * Extension function to load all items in a Feed
  */
 suspend fun <T : Any> Feed<T>.load(): List<T> {
-    val feedData = this.getPagedData(null)
-    val pagedData = feedData.pagedData
-    val page = pagedData.load(null)
-    return page.data
+    return Feed.Companion.loadAll(this)
 }
 
 /**
@@ -36,31 +26,31 @@ suspend fun <T : Any> Feed<T>.load(): List<T> {
  */
 fun PagedData<EchoMediaItem>.toShelfFeed(): Feed<Shelf> {
     return Feed(listOf()) { _ -> 
-        Feed.Data(object : PagedData<Shelf> {
-            override suspend fun load(continuation: String?): PagedData.Page<Shelf> {
-                val page = this@toShelfFeed.load(continuation)
-                val shelves = page.data.map { item ->
-                    Shelf.Item(item)
-                }
-                return PagedData.Page(shelves, page.continuation)
+        Feed.Data(object : PagedData<Shelf>() {
+            override fun clear() {
+                this@toShelfFeed.clear()
+            }
+            
+            override suspend fun loadAllInternal(): List<Shelf> {
+                val items = this@toShelfFeed.loadAll()
+                return items.map { Shelf.Item(it) }
+            }
+            
+            override suspend fun loadListInternal(continuation: String?): Page<Shelf> {
+                val page = this@toShelfFeed.loadPage(continuation)
+                val shelves = page.data.map { item -> Shelf.Item(item) }
+                return Page(shelves, page.continuation)
+            }
+            
+            override fun invalidate(continuation: String?) {
+                this@toShelfFeed.invalidate(continuation)
+            }
+            
+            override fun <R : Any> map(block: suspend (Result<List<Shelf>>) -> List<R>): PagedData<R> {
+                return PagedData.Single { block(runCatching { loadAll() }) }
             }
         })
     }
 }
 
-/**
- * Extension function to check if a string contains a timestamp
- */
-fun String.containsTimestamp(): Boolean {
-    return this.contains(Regex("\\d{10,}"))
-}
-
-/**
- * Extension function to create a Date object from a string year
- */
-fun String.toDate(): dev.brahmkshatriya.echo.common.models.Date = dev.brahmkshatriya.echo.common.models.Date(this.toInt())
-
-/**
- * Extension function to create a Date from a string containing a timestamp
- */
-fun String.toDateFromTimestamp(): dev.brahmkshatriya.echo.common.models.Date = dev.brahmkshatriya.echo.common.models.Date(this.toLong())
+// Extension functions for date conversion moved to Convertors.kt
