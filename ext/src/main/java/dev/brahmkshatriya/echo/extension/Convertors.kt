@@ -2,20 +2,10 @@ package dev.brahmkshatriya.echo.extension
 
 import dev.brahmkshatriya.echo.common.helpers.PagedData
 import dev.brahmkshatriya.echo.common.models.Album
-import dev.brahmkshatriya.echo.commo// String to NetworkRequest extension function
-fun String.toRequest(headers: Map<String, String> = emptyMap()): NetworkRequest {
-    return NetworkRequest(this, headers)
-}
-
-suspend fun HttpResponse.getUsers(
-    cookie: String,
-    auth: String
-) = bodyAsText().let {
-    val trimmed = it.substringAfter(")}]'}")
-    json.decodeFromString<GoogleAccountResponse>(trimmed)
-}.getUsers(cookie, auth)s.Artist
+import dev.brahmkshatriya.echo.common.models.Artist
 import dev.brahmkshatriya.echo.common.models.Date
 import dev.brahmkshatriya.echo.common.models.EchoMediaItem
+import dev.brahmkshatriya.echo.common.models.Feed
 import dev.brahmkshatriya.echo.common.models.ImageHolder
 import dev.brahmkshatriya.echo.common.models.ImageHolder.Companion.toImageHolder
 import dev.brahmkshatriya.echo.common.models.NetworkRequest
@@ -57,16 +47,14 @@ suspend fun MediaItemLayout.toShelf(
             item.toEchoMediaItem(single, quality)
         },
         more = view_more?.getBrowseParamsData()?.browse_id?.let { id ->
-            }.let {
-                val pagedData = PagedData.Single {
-                    val rows =
-                        api.GenericFeedViewMorePage.getGenericFeedViewMorePage(id).getOrThrow()
-                    rows.mapNotNull { itemLayout ->
-                        itemLayout.toEchoMediaItem(single, quality)
-                    }
+            val pagedData = PagedData.Single {
+                val rows =
+                    api.GenericFeedViewMorePage.getGenericFeedViewMorePage(id).getOrThrow()
+                rows.mapNotNull { itemLayout ->
+                    itemLayout.toEchoMediaItem(single, quality)
                 }
-                Feed(listOf()) { _ -> Feed.Data(pagedData) }
             }
+            pagedData.toFeed()
         }
     )
 }
@@ -198,7 +186,6 @@ fun User.toArtist(): Artist {
         extras = extras
     )
 }
-
 
 val json = Json { ignoreUnknownKeys = true }
 suspend fun HttpResponse.getUsers(
