@@ -3,7 +3,7 @@ package dev.brahmkshatriya.echo.extension
 import dev.brahmkshatriya.echo.common.helpers.PagedData
 import dev.brahmkshatriya.echo.common.models.Album
 import dev.brahmkshatriya.echo.common.models.Artist
-import dev.brahmkshatriya.echo.common.models.Date.Companion.toDate
+import dev.brahmkshatriya.echo.common.models.Date
 import dev.brahmkshatriya.echo.common.models.EchoMediaItem
 import dev.brahmkshatriya.echo.common.models.ImageHolder
 import dev.brahmkshatriya.echo.common.models.ImageHolder.Companion.toImageHolder
@@ -24,6 +24,9 @@ import dev.toastbits.ytmkt.model.external.mediaitem.YtmSong
 import io.ktor.client.statement.HttpResponse
 import io.ktor.client.statement.bodyAsText
 import kotlinx.serialization.json.Json
+
+// Extension function to create a Date object from a string year
+fun String.toDate() = Date(this.toInt())
 
 suspend fun MediaItemLayout.toShelf(
     api: YoutubeiApi,
@@ -54,16 +57,15 @@ fun YtmMediaItem.toEchoMediaItem(
     quality: ThumbnailProvider.Quality
 ): EchoMediaItem? {
     return when (this) {
-        is YtmSong -> EchoMediaItem.TrackItem(toTrack(quality))
+        is YtmSong -> toTrack(quality)
         is YtmPlaylist -> when (type) {
-            YtmPlaylist.Type.ALBUM -> EchoMediaItem.Lists.AlbumItem(toAlbum(single, quality))
+            YtmPlaylist.Type.ALBUM -> toAlbum(single, quality)
             else -> {
-                if (id != "VLSE") EchoMediaItem.Lists.PlaylistItem(toPlaylist(quality))
+                if (id != "VLSE") toPlaylist(quality)
                 else null
             }
         }
-
-        is YtmArtist -> toArtist(quality).let { EchoMediaItem.Profile.ArtistItem(it) }
+        is YtmArtist -> toArtist(quality)
         else -> null
     }
 }
@@ -82,7 +84,7 @@ fun YtmPlaylist.toPlaylist(
         isEditable = bool.getOrNull(1) ?: false,
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
         authors = artists?.map { it.toUser(quality) } ?: emptyList(),
-        tracks = item_count,
+        trackCount = item_count,
         duration = total_duration,
         creationDate = year?.toDate(),
         description = description,
@@ -103,7 +105,7 @@ fun YtmPlaylist.toAlbum(
         isExplicit = bool.firstOrNull() ?: false,
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
         artists = artists?.map { it.toArtist(quality) } ?: emptyList(),
-        tracks = item_count ?: if (single) 1 else null,
+        trackCount = item_count ?: if (single) 1 else null,
         releaseDate = year?.toDate(),
         label = null,
         duration = total_duration,
@@ -128,7 +130,7 @@ fun YtmSong.toTrack(
         duration = duration,
         plays = null,
         releaseDate = album?.releaseDate,
-        isLiked = is_explicit,
+        isExplicit = is_explicit,
         extras = extras,
     )
 }
@@ -136,7 +138,7 @@ fun YtmSong.toTrack(
 private fun getCover(
     id: String,
     quality: ThumbnailProvider.Quality
-): ImageHolder.UrlRequestImageHolder {
+): ImageHolder.NetworkRequestImageHolder {
     return when (quality) {
         ThumbnailProvider.Quality.LOW -> "https://img.youtube.com/vi/$id/mqdefault.jpg"
         ThumbnailProvider.Quality.HIGH -> "https://img.youtube.com/vi/$id/maxresdefault.jpg"

@@ -31,7 +31,7 @@ import dev.brahmkshatriya.echo.common.models.Playlist
 import dev.brahmkshatriya.echo.common.models.QuickSearchItem
 import dev.brahmkshatriya.echo.common.models.Radio
 import dev.brahmkshatriya.echo.common.models.Request
-import dev.brahmkshatriya.echo.common.models.Request.Companion.toRequest
+import dev.brahmkshatriya.echo.common.models.NetworkRequest.Companion.toGetRequest
 import dev.brahmkshatriya.echo.common.models.Shelf
 import dev.brahmkshatriya.echo.common.models.Streamable
 import dev.brahmkshatriya.echo.common.models.Streamable.Media.Companion.toServerMedia
@@ -400,7 +400,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                 }
                 if (url != null) {
                     Streamable.Source.Http(
-                        request = url.toRequest(),
+                        request = url.toGetRequest(),
                         quality = audioBitrate
                     ).also {
                         println("DEBUG: Created audio source for itag $itag with bitrate $audioBitrate")
@@ -1368,7 +1368,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                 }
                 else -> {
                     Streamable.Source.Http(
-                        enhancedAudioUrl.toRequest(),
+                        enhancedAudioUrl.toGetRequest(),
                         quality = 192000 
                     )
                 }
@@ -1398,7 +1398,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         }
     }
 
-    override suspend fun loadTrack(track: Track) = coroutineScope {
+    override suspend fun loadTrack(track: Track, isDownload: Boolean): Track = coroutineScope {
         ensureVisitorId()
         
         println("DEBUG: Loading track: ${track.title} (${track.id})")
@@ -1448,7 +1448,10 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         }
     }
 
-    override fun getShelves(track: Track) = PagedData.Single { loadRelated(track) }
+    override suspend fun loadFeed(track: Track): Feed<Shelf>? {
+        val shelves = loadRelated(track)
+        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
+    }
 
     override suspend fun deleteQuickSearch(item: QuickSearchItem) {
         searchSuggestionsEndpoint.delete(item as QuickSearchItem.Query)
@@ -1550,7 +1553,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     override suspend fun radio(track: Track, context: EchoMediaItem?): Radio {
         val id = "radio_${track.id}"
-        val cont = (context as? EchoMediaItem.Lists.RadioItem)?.radio?.extras?.get("cont")
+        val cont = context?.extras?.get("cont")
         val result = api.SongRadio.getSongRadio(track.id, cont).getOrThrow()
         val tracks = result.items.map { song -> song.toTrack(thumbnailQuality) }
         return Radio(
@@ -1571,9 +1574,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         return radio(track, null)
     }
 
-    override fun getShelves(album: Album): PagedData<Shelf> = PagedData.Single {
-        loadTracks(album).loadAll().lastOrNull()?.let { loadRelated(loadTrack(it)) }
-            ?: emptyList()
+    override suspend fun loadFeed(album: Album): Feed<Shelf>? {
+        val tracks = loadTracks(album).loadAll()
+        val lastTrack = tracks.lastOrNull() ?: return null
+        val loadedTrack = loadTrack(lastTrack, false)
+        val shelves = loadRelated(loadedTrack)
+        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
     }
 
 
@@ -1615,11 +1621,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         } ?: emptyList()
     }
 
-    override fun getShelves(artist: Artist) = PagedData.Single {
-        getArtistMediaItems(artist)
+    override suspend fun loadFeed(artist: Artist): Feed<Shelf>? {
+        val shelves = getArtistMediaItems(artist)
+        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
     }
 
-    override fun getShelves(user: User) = getShelves(user.toArtist())
+    override suspend fun loadFeed(user: User): Feed<Shelf>? = loadFeed(user.toArtist())
 
     override suspend fun loadUser(user: User): User {
         loadArtist(user.toArtist())
@@ -1638,16 +1645,19 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         return result.toArtist(HIGH)
     }
 
-    override fun getShelves(playlist: Playlist) = PagedData.Single {
+    override suspend fun loadFeed(playlist: Playlist): Feed<Shelf>? {
         val cont = playlist.extras["relatedId"] ?: throw Exception("No related id found.")
-        if (cont.startsWith("id://")) {
+        val shelves = if (cont.startsWith("id://")) {
             val id = cont.substring(5)
-            getShelves(loadTrack(Track(id, ""))).loadList(null).data
-                .filterIsInstance<Shelf.Category>()
+            val track = Track(id, "")
+            val loadedTrack = loadTrack(track, false)
+            val feed = loadFeed(loadedTrack)
+            feed?.loadList(null)?.data?.filterIsInstance<Shelf.Category>() ?: emptyList()
         } else {
             val continuation = songRelatedEndpoint.loadFromPlaylist(cont).getOrThrow()
             continuation.map { it.toShelf(api, language, thumbnailQuality) }
         }
+        return Feed(emptyList()) { _ -> Feed.Data(PagedData.Single { shelves }) }
     }
 
 
@@ -1666,9 +1676,9 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
 
     override val webViewRequest = object : WebViewRequest.Cookie<List<User>> {
         override val initialUrl =
-            "https://accounts.google.com/v3/signin/identifier?dsh=S1527412391%3A1678373417598386&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Den-GB%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F%253Fcbrd%253D1%26feature%3D__FEATURE__&hl=en-GB&ifkv=AWnogHfK4OXI8X1zVlVjzzjybvICXS4ojnbvzpE4Gn_Pfddw7fs3ERdfk-q3tRimJuoXjfofz6wuzg&ltmpl=music&passive=true&service=youtube&uilel=3&flowName=GlifWebSignIn&flowEntry=ServiceLogin".toRequest()
+            "https://accounts.google.com/v3/signin/identifier?dsh=S1527412391%3A1678373417598386&continue=https%3A%2F%2Fwww.youtube.com%2Fsignin%3Faction_handle_signin%3Dtrue%26app%3Ddesktop%26hl%3Den-GB%26next%3Dhttps%253A%252F%252Fmusic.youtube.com%252F%253Fcbrd%253D1%26feature%3D__FEATURE__&hl=en-GB&ifkv=AWnogHfK4OXI8X1zVlVjzzjybvICXS4ojnbvzpE4Gn_Pfddw7fs3ERdfk-q3tRimJuoXjfofz6wuzg&ltmpl=music&passive=true&service=youtube&uilel=3&flowName=GlifWebSignIn&flowEntry=ServiceLogin".toGetRequest()
         override val stopUrlRegex = "https://music\\.youtube\\.com/.*".toRegex()
-        override suspend fun onStop(url: Request, cookie: String): List<User> {
+        override suspend fun onStop(url: NetworkRequest, cookie: String): List<User> {
             if (!cookie.contains("SAPISID")) throw Exception("Login Failed, could not load SAPISID")
             val auth = run {
                 val currentTime = System.currentTimeMillis() / 1000
