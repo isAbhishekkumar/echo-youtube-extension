@@ -12,10 +12,11 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
+        jcenter() // Add JCenter for older dependencies
+        maven { url = uri("https://jitpack.io") } // Add JitPack for GitHub-hosted dependencies
     }
 }
 
-val extName: String by settings
-rootProject.name = extName
+rootProject.name = "Youtube Music Extension"
 include(":app")
 include(":ext")

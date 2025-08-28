@@ -48,7 +48,10 @@ tasks.register("generateProguardRules") {
             """
                 -dontobfuscate
                 -keep,allowoptimization class dev.brahmkshatriya.echo.extension.$extClass
-                """.trimMargin()
+                -keep class dev.brahmkshatriya.echo.extension.endpoints.** { *; }
+                -keep class dev.toastbits.ytmkt.** { *; }
+                -keepclassmembers class dev.brahmkshatriya.echo.extension.$extClass { *; }
+                """.trimIndent()
         )
     }
 }
@@ -95,8 +98,13 @@ android {
             isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
                 generatedProguard.absolutePath
             )
+        }
+        
+        debug {
+            isMinifyEnabled = false  // Disable for debugging
         }
     }
 
