@@ -1,1 +1,8 @@
 -keep class kotlinx.serialization.** { *; }
+-keep class dev.brahmkshatriya.echo.extension.YoutubeExtension { *; }
+-keep class dev.brahmkshatriya.echo.extension.** { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.extension.YoutubeExtension { *; }
+-keep class dev.toastbits.ytmkt.** { *; }
+-keepattributes *Annotation*, InnerClasses
+-dontwarn kotlinx.serialization.**
+-dontwarn kotlin.reflect.jvm.internal.**
