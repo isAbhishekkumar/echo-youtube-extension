@@ -118,7 +118,7 @@ fun YtmPlaylist.toAlbum(
         trackCount = item_count ?: if (single) 1 else null,
         releaseDate = year?.let { if (it.containsTimestamp()) it.toDateFromTimestamp() else it.toDate() },
         label = null,
-        duration = total_duration,
+        duration = total_duration?.toLong(),
         description = description,
     )
 }
@@ -137,7 +137,7 @@ fun YtmSong.toTrack(
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(crop = true)
             ?: getCover(id, quality),
         album = album,
-        duration = duration,
+        duration = duration?.toLong(),
         plays = null,
         releaseDate = album?.releaseDate,
         isExplicit = is_explicit,

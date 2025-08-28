@@ -950,7 +950,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                             }
                                             else -> {
                                                 Streamable.Source.Http(
-                                                    freshUrl.toRequest(),
+                                                    NetworkRequest(freshUrl, emptyMap()),
                                                     quality = qualityValue
                                                 )
                                             }
@@ -1133,7 +1133,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                             }
                                             else -> {
                                                 Streamable.Source.Http(
-                                                    freshUrl.toRequest(),
+                                                    NetworkRequest(freshUrl, emptyMap()),
                                                     quality = qualityValue
                                                 )
                                             }
@@ -1155,7 +1155,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                             }
                                             else -> {
                                                 Streamable.Source.Http(
-                                                    freshUrl.toRequest(),
+                                                    NetworkRequest(freshUrl, emptyMap()),
                                                     quality = qualityValue
                                                 )
                                             }
@@ -1624,7 +1624,16 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                                 item.toEchoMediaItem(single, thumbnailQuality)
                             }
                         }.flatten()
-                    }.toShelfFeed()
+                    }.let { mediaItems ->
+                        Feed(listOf()) { _ -> 
+                            Feed.Data(PagedData.Continuous { continuation ->
+                                val shelves = mediaItems.map { item ->
+                                    Shelf.Item(item)
+                                }
+                                PagedData.Page(shelves, null)
+                            })
+                        }
+                    }
                 })
         } ?: emptyList()
     }
@@ -1665,8 +1674,8 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val loadedTrack = loadTrack(track, false)
             val feed = loadFeed(loadedTrack)
             coroutineScope { 
-                feed?.getPagedData(null)?.pagedData?.let {
-                    val page = it.load(null)
+                feed?.getPagedData(null)?.pagedData?.let { pagedData ->
+                    val page = pagedData.load(null)
                     page.data.filterIsInstance<Shelf.Category>()
                 } ?: emptyList()
             }
@@ -1717,6 +1726,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     }
 
     // Implement LoginClient methods
+    // Implements LoginClient
     override suspend fun onSetLoginUser(user: User?) {
         if (user == null) {
             api.user_auth_state = null
@@ -1807,6 +1817,7 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     }
 
     // Implement LikeClient methods
+    // Implements LikeClient
     override suspend fun likeTrack(track: Track, isLiked: Boolean) {
         val likeStatus = if (isLiked) SongLikedStatus.LIKED else SongLikedStatus.NEUTRAL
         withUserAuth { it.SetSongLiked.setSongLiked(track.id, likeStatus).getOrThrow() }
