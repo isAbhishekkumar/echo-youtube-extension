@@ -12,15 +12,10 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-       }
-    }
-    versionCatalogs {
-        create("libs") {
-            from(files("gradle/libs.versions.toml"))
-        }
     }
 }
 
-rootProject.name = "echo-youtube-extension"
+val extName: String by settings
+rootProject.name = extName
 include(":app")
 include(":ext")
