@@ -50,6 +50,6 @@
 
 # Keep loadSearchFeed method intact
 -keep,includedescriptorclasses class dev.brahmkshatriya.echo.extension.YoutubeExtension {
-    public suspend ** loadSearchFeed(...);
-    public suspend ** radio(...);
+    public *** loadSearchFeed(...);
+    public *** radio(...);
 }
