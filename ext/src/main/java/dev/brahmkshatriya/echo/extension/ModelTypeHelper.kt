@@ -26,16 +26,30 @@ object ModelTypeHelper {
      */
     @JvmStatic
     fun userToArtist(user: User): Artist {
-        val newExtras = user.extras.toMutableMap().apply {
-            put(CONVERTED_FROM_USER_KEY, CONVERTED_FROM_USER_VALUE)
+        try {
+            val newExtras = user.extras.toMutableMap().apply {
+                put(CONVERTED_FROM_USER_KEY, CONVERTED_FROM_USER_VALUE)
+            }
+            return Artist(
+                id = user.id,
+                name = user.name,
+                cover = user.cover,
+                subtitle = user.subtitle,
+                extras = newExtras
+            )
+        } catch (e: Exception) {
+            // If conversion fails for any reason, create a fallback Artist
+            return Artist(
+                id = user.id,
+                name = user.name ?: "Unknown Artist",
+                cover = null,
+                subtitle = null,
+                extras = mapOf(
+                    CONVERTED_FROM_USER_KEY to CONVERTED_FROM_USER_VALUE,
+                    "error" to "Conversion failed"
+                )
+            )
         }
-        return Artist(
-            id = user.id,
-            name = user.name,
-            cover = user.cover,
-            subtitle = user.subtitle,
-            extras = newExtras
-        )
     }
     
     /**
@@ -64,10 +78,30 @@ object ModelTypeHelper {
      */
     @JvmStatic
     fun safeArtistConversion(obj: Any?): Artist? {
-        return when (obj) {
-            is Artist -> obj
-            is User -> userToArtist(obj)
-            else -> null
+        try {
+            return when (obj) {
+                is Artist -> obj
+                is User -> userToArtist(obj)
+                is EchoMediaItem -> Artist(
+                    id = obj.id,
+                    name = obj.name ?: "Unknown Artist",
+                    cover = obj.cover,
+                    subtitle = obj.subtitle,
+                    extras = obj.extras + mapOf(CONVERTED_FROM_USER_KEY to CONVERTED_FROM_USER_VALUE)
+                )
+                else -> null
+            }
+        } catch (e: Exception) {
+            // Create a fallback Artist if conversion fails
+            return obj?.let {
+                Artist(
+                    id = "fallback-${it.hashCode()}",
+                    name = "Unknown Artist",
+                    cover = null,
+                    subtitle = null,
+                    extras = mapOf("error" to "Conversion failed")
+                )
+            }
         }
     }
 

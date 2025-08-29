@@ -79,13 +79,19 @@ object SearchResultsFixer {
      */
     @JvmStatic
     fun fixSearchResultItem(item: EchoMediaItem): EchoMediaItem {
-        return when (item) {
-            is Track -> fixTrack(item)
-            is Album -> fixAlbum(item)
-            is Playlist -> fixPlaylist(item)
-            is Artist -> item
-            is User -> ModelTypeHelper.userToArtist(item)
-            else -> item
+        try {
+            return when (item) {
+                is Track -> fixTrack(item)
+                is Album -> fixAlbum(item)
+                is Playlist -> fixPlaylist(item)
+                is Artist -> item
+                is User -> ModelTypeHelper.userToArtist(item)
+                else -> item
+            }
+        } catch (e: Exception) {
+            // If any conversion fails, return the original item
+            // This prevents the entire search result from failing
+            return item
         }
     }
     
@@ -94,15 +100,39 @@ object SearchResultsFixer {
      */
     @JvmStatic
     fun fixTrack(track: Track): Track {
-        val fixedArtists = track.artists.map { artist ->
-            when (artist) {
-                is Artist -> artist
-                is User -> ModelTypeHelper.userToArtist(artist)
-                else -> throw IllegalArgumentException("Unknown artist type: ${artist.javaClass}")
+        val fixedArtists = track.artists.mapNotNull { artist ->
+            try {
+                when (artist) {
+                    is Artist -> artist
+                    is User -> ModelTypeHelper.userToArtist(artist)
+                    else -> {
+                        // Create a generic Artist when type doesn't match expected types
+                        Artist(
+                            id = (artist as? EchoMediaItem)?.id ?: "unknown-id",
+                            name = (artist as? EchoMediaItem)?.name ?: "Unknown",
+                            cover = (artist as? EchoMediaItem)?.cover,
+                            subtitle = (artist as? EchoMediaItem)?.subtitle,
+                            extras = (artist as? EchoMediaItem)?.extras ?: emptyMap()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // If conversion fails, create a fallback Artist
+                Artist(
+                    id = "fallback-${track.id}-artist",
+                    name = "Unknown Artist",
+                    cover = null,
+                    subtitle = null,
+                    extras = mapOf("error" to "Conversion failed")
+                )
             }
         }
         
-        val fixedAlbum = track.album?.let { fixAlbum(it) }
+        val fixedAlbum = try {
+            track.album?.let { fixAlbum(it) }
+        } catch (e: Exception) {
+            track.album
+        }
         
         return track.copy(
             artists = fixedArtists,
@@ -115,11 +145,31 @@ object SearchResultsFixer {
      */
     @JvmStatic
     fun fixAlbum(album: Album): Album {
-        val fixedArtists = album.artists.map { artist ->
-            when (artist) {
-                is Artist -> artist
-                is User -> ModelTypeHelper.userToArtist(artist)
-                else -> throw IllegalArgumentException("Unknown artist type: ${artist.javaClass}")
+        val fixedArtists = album.artists.mapNotNull { artist ->
+            try {
+                when (artist) {
+                    is Artist -> artist
+                    is User -> ModelTypeHelper.userToArtist(artist)
+                    else -> {
+                        // Create a generic Artist when type doesn't match expected types
+                        Artist(
+                            id = (artist as? EchoMediaItem)?.id ?: "unknown-id",
+                            name = (artist as? EchoMediaItem)?.name ?: "Unknown",
+                            cover = (artist as? EchoMediaItem)?.cover,
+                            subtitle = (artist as? EchoMediaItem)?.subtitle,
+                            extras = (artist as? EchoMediaItem)?.extras ?: emptyMap()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // If conversion fails, create a fallback Artist
+                Artist(
+                    id = "fallback-${album.id}-artist",
+                    name = "Unknown Artist",
+                    cover = null,
+                    subtitle = null,
+                    extras = mapOf("error" to "Conversion failed")
+                )
             }
         }
         
@@ -133,11 +183,31 @@ object SearchResultsFixer {
      */
     @JvmStatic
     fun fixPlaylist(playlist: Playlist): Playlist {
-        val fixedAuthors = playlist.authors.map { author ->
-            when (author) {
-                is Artist -> author
-                is User -> ModelTypeHelper.userToArtist(author)
-                else -> throw IllegalArgumentException("Unknown author type: ${author.javaClass}")
+        val fixedAuthors = playlist.authors.mapNotNull { author ->
+            try {
+                when (author) {
+                    is Artist -> author
+                    is User -> ModelTypeHelper.userToArtist(author)
+                    else -> {
+                        // Create a generic Artist when type doesn't match expected types
+                        Artist(
+                            id = (author as? EchoMediaItem)?.id ?: "unknown-id",
+                            name = (author as? EchoMediaItem)?.name ?: "Unknown",
+                            cover = (author as? EchoMediaItem)?.cover,
+                            subtitle = (author as? EchoMediaItem)?.subtitle,
+                            extras = (author as? EchoMediaItem)?.extras ?: emptyMap()
+                        )
+                    }
+                }
+            } catch (e: Exception) {
+                // If any conversion fails, create a fallback Artist
+                Artist(
+                    id = "fallback-${playlist.id}-author",
+                    name = "Unknown Artist",
+                    cover = null,
+                    subtitle = null,
+                    extras = mapOf("error" to "Conversion failed")
+                )
             }
         }
         

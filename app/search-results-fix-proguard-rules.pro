@@ -34,10 +34,21 @@
 -keepclassmembers class dev.brahmkshatriya.echo.common.models.User { *; }
 -keepclassmembers class dev.brahmkshatriya.echo.common.models.Artist { *; }
 -keepclassmembers class dev.brahmkshatriya.echo.common.models.EchoMediaItem { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.common.models.Playlist { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.common.models.Track { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.common.models.Album { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.common.models.Shelf { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.common.models.Shelf$* { *; }
 
-# Maintain proper inheritance relationship between User and EchoMediaItem
+# Maintain proper inheritance relationship between models and EchoMediaItem
 -keep class dev.brahmkshatriya.echo.common.models.User extends dev.brahmkshatriya.echo.common.models.EchoMediaItem
 -keep class dev.brahmkshatriya.echo.common.models.Artist extends dev.brahmkshatriya.echo.common.models.EchoMediaItem
+-keep class dev.brahmkshatriya.echo.common.models.Album extends dev.brahmkshatriya.echo.common.models.EchoMediaItem
+-keep class dev.brahmkshatriya.echo.common.models.Playlist extends dev.brahmkshatriya.echo.common.models.EchoMediaItem
+-keep class dev.brahmkshatriya.echo.common.models.Track extends dev.brahmkshatriya.echo.common.models.EchoMediaItem
+
+# Keep type information for all models to prevent ClassCastExceptions
+-keepattributes Signature,*Annotation*
 
 # Prevent any field inlining or removal in model classes
 -keepclassmembers class dev.brahmkshatriya.echo.common.models.** {

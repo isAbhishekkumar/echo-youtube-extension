@@ -1493,7 +1493,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val search = api.Search.search(query, null).getOrThrow()
             oldSearch = query to search.categories.map { (itemLayout, _) ->
                 // Fix shelf items for search results
-                SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
+                try {
+                    SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
+                } catch (e: Exception) {
+                    // If fixing fails, return the original shelf to prevent crashes
+                    itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                }
             }
             val searchTabs = search.categories.mapNotNull { (item, filter) ->
                 filter?.let {
@@ -1521,7 +1526,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                             val shelf = item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
                             if (shelf != null) {
                                 // Fix shelf items for search results
-                                SearchResultsFixer.fixSearchResultShelf(shelf)
+                                try {
+                                    SearchResultsFixer.fixSearchResultShelf(shelf)
+                                } catch (e: Exception) {
+                                    // If fixing fails, return the original shelf to prevent crashes
+                                    shelf
+                                }
                             } else null
                         }
                     }.flatten()
@@ -1536,7 +1546,12 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                     ).getOrThrow()
                     val data = result.layouts.map { itemLayout ->
                         // Fix shelf items for search results in tabs
-                        SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
+                        try {
+                            SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
+                        } catch (e: Exception) {
+                            // If fixing fails, return the original shelf to prevent crashes
+                            itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                        }
                     }
                     Page(data, result.ctoken)
                 }
