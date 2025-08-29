@@ -32,37 +32,72 @@ object SearchResultsFixer {
      */
     @JvmStatic
     fun fixSearchResultShelf(shelf: Shelf): Shelf {
-        return when (shelf) {
-            is Shelf.Item -> Shelf.Item(fixSearchResultItem(shelf.media))
-            
-            is Shelf.Lists.Items -> Shelf.Lists.Items(
-                id = shelf.id,
-                title = shelf.title,
-                subtitle = shelf.subtitle,
-                list = shelf.list.map { fixSearchResultItem(it) },
-                more = shelf.more
-            )
-            
-            is Shelf.Lists.Tracks -> Shelf.Lists.Tracks(
-                id = shelf.id,
-                title = shelf.title,
-                subtitle = shelf.subtitle,
-                list = shelf.list.map { fixTrack(it) },
-                more = shelf.more
-            )
-            
-            is Shelf.Lists.Categories -> Shelf.Lists.Categories(
-                id = shelf.id,
-                title = shelf.title,
-                list = shelf.list.map { fixSearchResultCategory(it) },
-                more = shelf.more
-            )
-            
-            is Shelf.Category -> Shelf.Category(
-                id = shelf.id,
-                title = shelf.title,
-                feed = shelf.feed
-            )
+        try {
+            return when (shelf) {
+                is Shelf.Item -> try {
+                    Shelf.Item(fixSearchResultItem(shelf.media))
+                } catch (e: Exception) {
+                    shelf
+                }
+                
+                is Shelf.Lists.Items -> try {
+                    Shelf.Lists.Items(
+                        id = shelf.id,
+                        title = shelf.title,
+                        subtitle = shelf.subtitle,
+                        list = shelf.list.mapNotNull { 
+                            try {
+                                fixSearchResultItem(it)
+                            } catch (e: Exception) {
+                                it // Return original item if fixing fails
+                            }
+                        },
+                        more = shelf.more
+                    )
+                } catch (e: Exception) {
+                    shelf
+                }
+                
+                is Shelf.Lists.Tracks -> try {
+                    Shelf.Lists.Tracks(
+                        id = shelf.id,
+                        title = shelf.title,
+                        subtitle = shelf.subtitle,
+                        list = shelf.list.mapNotNull { 
+                            try {
+                                fixTrack(it)
+                            } catch (e: Exception) {
+                                it // Return original track if fixing fails
+                            }
+                        },
+                        more = shelf.more
+                    )
+                } catch (e: Exception) {
+                    shelf
+                }
+                
+                is Shelf.Lists.Categories -> try {
+                    Shelf.Lists.Categories(
+                        id = shelf.id,
+                        title = shelf.title,
+                        list = shelf.list.map { 
+                            try {
+                                fixSearchResultCategory(it)
+                            } catch (e: Exception) {
+                                it // Return original category if fixing fails
+                            }
+                        },
+                        more = shelf.more
+                    )
+                } catch (e: Exception) {
+                    shelf
+                }
+                
+                is Shelf.Category -> shelf // Categories don't need fixing
+            }
+        } catch (e: Exception) {
+            // If any error occurs, return original shelf
+            return shelf
         }
     }
     
@@ -109,10 +144,14 @@ object SearchResultsFixer {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (artist as? EchoMediaItem)?.id ?: "unknown-id",
-                            name = when (artist) {
-                                is User -> artist.name
-                                is EchoMediaItem -> artist.title
-                                else -> "Unknown"
+                            name = try {
+                                when (artist) {
+                                    is User -> artist.name ?: "Unknown Artist"
+                                    is EchoMediaItem -> artist.title ?: artist.id
+                                    else -> "Unknown Artist"
+                                }
+                            } catch (e: Exception) {
+                                "Unknown Artist"
                             },
                             cover = (artist as? EchoMediaItem)?.cover,
                             subtitle = (artist as? EchoMediaItem)?.subtitle,
@@ -158,10 +197,14 @@ object SearchResultsFixer {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (artist as? EchoMediaItem)?.id ?: "unknown-id",
-                            name = when (artist) {
-                                is User -> artist.name
-                                is EchoMediaItem -> artist.title
-                                else -> "Unknown"
+                            name = try {
+                                when (artist) {
+                                    is User -> artist.name ?: "Unknown Artist"
+                                    is EchoMediaItem -> artist.title ?: artist.id
+                                    else -> "Unknown Artist"
+                                }
+                            } catch (e: Exception) {
+                                "Unknown Artist"
                             },
                             cover = (artist as? EchoMediaItem)?.cover,
                             subtitle = (artist as? EchoMediaItem)?.subtitle,
@@ -200,10 +243,14 @@ object SearchResultsFixer {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (author as? EchoMediaItem)?.id ?: "unknown-id",
-                            name = when (author) {
-                                is User -> author.name
-                                is EchoMediaItem -> author.title
-                                else -> "Unknown"
+                            name = try {
+                                when (author) {
+                                    is User -> author.name ?: "Unknown Artist"
+                                    is EchoMediaItem -> author.title ?: author.id
+                                    else -> "Unknown Artist"
+                                }
+                            } catch (e: Exception) {
+                                "Unknown Artist"
                             },
                             cover = (author as? EchoMediaItem)?.cover,
                             subtitle = (author as? EchoMediaItem)?.subtitle,

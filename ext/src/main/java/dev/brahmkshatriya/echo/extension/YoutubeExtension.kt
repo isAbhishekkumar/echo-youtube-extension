@@ -1517,43 +1517,98 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             val pagedData = if (query.isNotBlank() && (tab == null || tab.id == "All")) {
                 // For search with query and "All" tab
                 PagedData.Single {
-                    val old = oldSearch?.takeIf { it.first == query }?.second
-                    if (old != null) return@Single old
-                    
-                    val search = api.Search.search(query, tab?.id).getOrThrow()
-                    search.categories.map { (itemLayout, _) ->
-                        itemLayout.items.mapNotNull { item ->
-                            val shelf = item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
-                            if (shelf != null) {
-                                // Fix shelf items for search results
-                                try {
-                                    SearchResultsFixer.fixSearchResultShelf(shelf)
-                                } catch (e: Exception) {
-                                    // If fixing fails, return the original shelf to prevent crashes
-                                    shelf
-                                }
-                            } else null
+                    try {
+                        val old = oldSearch?.takeIf { it.first == query }?.second
+                        if (old != null) return@Single old
+                        
+                        val search = try {
+                            api.Search.search(query, tab?.id).getOrThrow()
+                        } catch (e: Exception) {
+                            // If search fails, return an empty list
+                            return@Single emptyList()
                         }
-                    }.flatten()
+                        
+                        try {
+                            search.categories.map { (itemLayout, _) ->
+                                try {
+                                    itemLayout.items.mapNotNull { item ->
+                                        try {
+                                            val shelf = item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
+                                            if (shelf != null) {
+                                                // Fix shelf items for search results
+                                                try {
+                                                    SearchResultsFixer.fixSearchResultShelf(shelf)
+                                                } catch (e: Exception) {
+                                                    // If fixing fails, return the original shelf to prevent crashes
+                                                    shelf
+                                                }
+                                            } else null
+                                        } catch (e: Exception) {
+                                            // Skip items that cause exceptions
+                                            null
+                                        }
+                                    }
+                                } catch (e: Exception) {
+                                    // If processing a category fails, return an empty list for this category
+                                    emptyList()
+                                }
+                            }.flatten()
+                        } catch (e: Exception) {
+                            // If the entire process fails, return an empty list
+                            emptyList()
+                        }
+                    } catch (e: Exception) {
+                        // Global error handler
+                        emptyList()
+                    }
                 }
             } else if (tab != null) {
                 // For tab-based search
                 PagedData.Continuous {
-                    val params = tab.id
-                    val continuation = it
-                    val result = songFeedEndPoint.getSongFeed(
-                        params = params, continuation = continuation
-                    ).getOrThrow()
-                    val data = result.layouts.map { itemLayout ->
-                        // Fix shelf items for search results in tabs
-                        try {
-                            SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
+                    try {
+                        val params = tab.id
+                        val continuation = it
+                        val result = try {
+                            songFeedEndPoint.getSongFeed(
+                                params = params, continuation = continuation
+                            ).getOrThrow()
                         } catch (e: Exception) {
-                            // If fixing fails, return the original shelf to prevent crashes
-                            itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                            // If the feed fetch fails, return an empty page
+                            return@Continuous Page(emptyList(), null)
                         }
+                        
+                        val data = try {
+                            result.layouts.mapNotNull { itemLayout ->
+                                try {
+                                    // Fix shelf items for search results in tabs
+                                    val shelf = try {
+                                        itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                                    } catch (e: Exception) {
+                                        // If conversion fails, skip this item
+                                        return@mapNotNull null
+                                    }
+                                    
+                                    try {
+                                        SearchResultsFixer.fixSearchResultShelf(shelf)
+                                    } catch (e: Exception) {
+                                        // If fixing fails, return the original shelf
+                                        shelf
+                                    }
+                                } catch (e: Exception) {
+                                    // If any error occurs for a specific layout, skip it
+                                    null
+                                }
+                            }
+                        } catch (e: Exception) {
+                            // If the entire mapping fails, return an empty list
+                            emptyList()
+                        }
+                        
+                        Page(data, result.ctoken)
+                    } catch (e: Exception) {
+                        // Global error handler for the entire data loading process
+                        Page(emptyList(), null)
                     }
-                    Page(data, result.ctoken)
                 }
             } else {
                 // Empty result

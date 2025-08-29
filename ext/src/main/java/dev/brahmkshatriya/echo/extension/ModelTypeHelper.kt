@@ -178,12 +178,17 @@ object ModelTypeHelper {
      */
     @JvmStatic
     fun ensureProperTypesInMediaItem(item: EchoMediaItem): EchoMediaItem {
-        return when (item) {
-            is Track -> ensureProperArtistsInTrack(item)
-            is Album -> ensureProperArtistsInAlbum(item)
-            is Playlist -> ensureProperAuthorsInPlaylist(item)
-            is User -> userToArtist(item) // Convert Users to Artists directly
-            else -> item
+        try {
+            return when (item) {
+                is Track -> ensureProperArtistsInTrack(item)
+                is Album -> ensureProperArtistsInAlbum(item)
+                is Playlist -> ensureProperAuthorsInPlaylist(item)
+                is User -> userToArtist(item) // Convert Users to Artists directly
+                else -> item
+            }
+        } catch (e: Exception) {
+            // If any conversion fails, return the original item
+            return item
         }
     }
     
@@ -192,26 +197,60 @@ object ModelTypeHelper {
      */
     @JvmStatic
     fun fixSearchResultShelf(shelf: Shelf): Shelf {
-        return when (shelf) {
-            is Shelf.Item -> Shelf.Item(ensureProperTypesInMediaItem(shelf.media))
-            
-            is Shelf.Lists.Items -> Shelf.Lists.Items(
-                id = shelf.id,
-                title = shelf.title,
-                subtitle = shelf.subtitle,
-                list = shelf.list.map { ensureProperTypesInMediaItem(it) },
-                more = shelf.more
-            )
-            
-            is Shelf.Lists.Tracks -> Shelf.Lists.Tracks(
-                id = shelf.id,
-                title = shelf.title,
-                subtitle = shelf.subtitle,
-                list = shelf.list.map { ensureProperArtistsInTrack(it) },
-                more = shelf.more
-            )
-            
-            else -> shelf // Other shelf types don't need fixing
+        try {
+            return when (shelf) {
+                is Shelf.Item -> try {
+                    Shelf.Item(ensureProperTypesInMediaItem(shelf.media))
+                } catch (e: Exception) {
+                    // If conversion fails for a specific item, return original
+                    shelf
+                }
+                
+                is Shelf.Lists.Items -> try {
+                    Shelf.Lists.Items(
+                        id = shelf.id,
+                        title = shelf.title,
+                        subtitle = shelf.subtitle,
+                        list = shelf.list.mapNotNull { 
+                            try {
+                                ensureProperTypesInMediaItem(it)
+                            } catch (e: Exception) {
+                                // Skip items that fail conversion
+                                null
+                            }
+                        },
+                        more = shelf.more
+                    )
+                } catch (e: Exception) {
+                    // If conversion fails for the entire list, return original
+                    shelf
+                }
+                
+                is Shelf.Lists.Tracks -> try {
+                    Shelf.Lists.Tracks(
+                        id = shelf.id,
+                        title = shelf.title,
+                        subtitle = shelf.subtitle,
+                        list = shelf.list.mapNotNull { 
+                            try {
+                                ensureProperArtistsInTrack(it)
+                            } catch (e: Exception) {
+                                // Skip tracks that fail conversion
+                                null
+                            }
+                        },
+                        more = shelf.more
+                    )
+                } catch (e: Exception) {
+                    // If conversion fails for the entire list, return original
+                    shelf
+                }
+                
+                else -> shelf // Other shelf types don't need fixing
+            }
+        } catch (e: Exception) {
+            // Global fallback if any error occurs
+            return shelf
         }
     }
 }
