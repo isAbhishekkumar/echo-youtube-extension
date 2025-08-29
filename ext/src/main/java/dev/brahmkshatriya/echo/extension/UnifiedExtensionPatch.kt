@@ -57,8 +57,8 @@ object UnifiedExtensionPatch {
         val patchedArtists = track.artists.map { artist ->
             when (artist) {
                 is Artist -> artist
-                is User -> ModelTypeHelper.userToArtist(artist)
-                else -> throw IllegalArgumentException("Unknown artist type: ${artist.javaClass}")
+                // If not Artist, must be User since these are the only two types expected here
+                else -> ModelTypeHelper.userToArtist(artist as User)
             }
         }
         
@@ -77,8 +77,8 @@ object UnifiedExtensionPatch {
         val patchedArtists = album.artists.map { artist ->
             when (artist) {
                 is Artist -> artist
-                is User -> ModelTypeHelper.userToArtist(artist)
-                else -> throw IllegalArgumentException("Unknown artist type: ${artist.javaClass}")
+                // If not Artist, must be User since these are the only two types expected here
+                else -> ModelTypeHelper.userToArtist(artist as User)
             }
         }
         
@@ -96,8 +96,8 @@ object UnifiedExtensionPatch {
         val patchedAuthors = playlist.authors.map { author ->
             when (author) {
                 is Artist -> author
-                is User -> ModelTypeHelper.userToArtist(author)
-                else -> throw IllegalArgumentException("Unknown author type: ${author.javaClass}")
+                // If not Artist, must be User since these are the only two types expected here
+                else -> ModelTypeHelper.userToArtist(author as User)
             }
         }
         
@@ -115,6 +115,7 @@ object UnifiedExtensionPatch {
         return when (obj) {
             is Artist -> obj
             is User -> ModelTypeHelper.userToArtist(obj)
+            // We need to keep the else -> null here because obj could be anything
             else -> null
         }
     }

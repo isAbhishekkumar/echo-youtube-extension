@@ -84,7 +84,7 @@ object ModelTypeHelper {
                 is User -> userToArtist(obj)
                 is EchoMediaItem -> Artist(
                     id = obj.id,
-                    name = if (obj is User) obj.name else obj.id,
+                    name = obj.id, // obj can't be User here as it was checked above
                     cover = obj.cover,
                     subtitle = obj.subtitle,
                     extras = obj.extras + mapOf(CONVERTED_FROM_USER_KEY to CONVERTED_FROM_USER_VALUE)
@@ -128,7 +128,7 @@ object ModelTypeHelper {
             when (artist) {
                 is Artist -> artist
                 is User -> userToArtist(artist)
-                else -> null
+                // No else branch needed as when is exhaustive
             }
         }
         
@@ -144,7 +144,7 @@ object ModelTypeHelper {
             when (artist) {
                 is Artist -> artist
                 is User -> userToArtist(artist)
-                else -> null
+                // No else branch needed as when is exhaustive
             }
         }
         
@@ -166,7 +166,7 @@ object ModelTypeHelper {
             when (author) {
                 is Artist -> author
                 is User -> userToArtist(author)
-                else -> null
+                // No else branch needed as when is exhaustive
             }
         }
         

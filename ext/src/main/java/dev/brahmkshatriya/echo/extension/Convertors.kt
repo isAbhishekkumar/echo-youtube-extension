@@ -100,7 +100,7 @@ fun YtmPlaylist.toPlaylist(
         title = name ?: "Unknown",
         isEditable = bool.getOrNull(1) ?: false,
         cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
-        authors = artists?.map { it.toUser(quality) } as? List<Artist> ?: emptyList(),
+        authors = artists?.map { it.toUser(quality) }?.let { ModelTypeHelper.safeArtistListConversion(it) } ?: emptyList(),
         trackCount = item_count?.toLong(),
         duration = total_duration?.toLong(),
         creationDate = year?.let { yearStr -> 

@@ -239,16 +239,17 @@ object SearchResultsFixer {
                 when (author) {
                     is Artist -> author
                     is User -> ModelTypeHelper.userToArtist(author)
+                    // Type checking is redundant, but we need to handle other unexpected types
+                    // that might appear in the list
                     else -> {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (author as? EchoMediaItem)?.id ?: "unknown-id",
                             name = try {
-                                when (author) {
-                                    is User -> author.name ?: "Unknown Artist"
-                                    is EchoMediaItem -> author.title ?: author.id
-                                    else -> "Unknown Artist"
-                                }
+                                // Since we're in the else branch, we know author is not User
+                                // but we still need to check if it's an EchoMediaItem
+                                if (author is EchoMediaItem) author.title ?: author.id
+                                else "Unknown Artist"
                             } catch (e: Exception) {
                                 "Unknown Artist"
                             },
