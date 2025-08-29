@@ -32,7 +32,7 @@ object ModelTypeHelper {
             }
             return Artist(
                 id = user.id,
-                name = user.name,
+                name = user.title,
                 cover = user.cover,
                 subtitle = user.subtitle,
                 extras = newExtras
@@ -41,7 +41,7 @@ object ModelTypeHelper {
             // If conversion fails for any reason, create a fallback Artist
             return Artist(
                 id = user.id,
-                name = user.name ?: "Unknown Artist",
+                name = user.title ?: "Unknown Artist",
                 cover = null,
                 subtitle = null,
                 extras = mapOf(
@@ -84,7 +84,7 @@ object ModelTypeHelper {
                 is User -> userToArtist(obj)
                 is EchoMediaItem -> Artist(
                     id = obj.id,
-                    name = obj.name ?: "Unknown Artist",
+                    name = obj.title ?: "Unknown Artist",
                     cover = obj.cover,
                     subtitle = obj.subtitle,
                     extras = obj.extras + mapOf(CONVERTED_FROM_USER_KEY to CONVERTED_FROM_USER_VALUE)

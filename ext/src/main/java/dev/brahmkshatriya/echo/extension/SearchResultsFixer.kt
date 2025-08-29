@@ -109,7 +109,7 @@ object SearchResultsFixer {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (artist as? EchoMediaItem)?.id ?: "unknown-id",
-                            name = (artist as? EchoMediaItem)?.name ?: "Unknown",
+                            name = (artist as? EchoMediaItem)?.title ?: "Unknown",
                             cover = (artist as? EchoMediaItem)?.cover,
                             subtitle = (artist as? EchoMediaItem)?.subtitle,
                             extras = (artist as? EchoMediaItem)?.extras ?: emptyMap()
@@ -154,7 +154,7 @@ object SearchResultsFixer {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (artist as? EchoMediaItem)?.id ?: "unknown-id",
-                            name = (artist as? EchoMediaItem)?.name ?: "Unknown",
+                            name = (artist as? EchoMediaItem)?.title ?: "Unknown",
                             cover = (artist as? EchoMediaItem)?.cover,
                             subtitle = (artist as? EchoMediaItem)?.subtitle,
                             extras = (artist as? EchoMediaItem)?.extras ?: emptyMap()
@@ -192,7 +192,7 @@ object SearchResultsFixer {
                         // Create a generic Artist when type doesn't match expected types
                         Artist(
                             id = (author as? EchoMediaItem)?.id ?: "unknown-id",
-                            name = (author as? EchoMediaItem)?.name ?: "Unknown",
+                            name = (author as? EchoMediaItem)?.title ?: "Unknown",
                             cover = (author as? EchoMediaItem)?.cover,
                             subtitle = (author as? EchoMediaItem)?.subtitle,
                             extras = (author as? EchoMediaItem)?.extras ?: emptyMap()
