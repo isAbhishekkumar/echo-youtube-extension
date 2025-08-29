@@ -100,6 +100,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
                 "additional-proguard-rules.pro",
+                "search-results-fix-proguard-rules.pro",
                 generatedProguard.absolutePath
             )
         }

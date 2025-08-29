@@ -2,7 +2,9 @@ package dev.brahmkshatriya.echo.extension
 
 import dev.brahmkshatriya.echo.common.models.Album
 import dev.brahmkshatriya.echo.common.models.Artist
+import dev.brahmkshatriya.echo.common.models.EchoMediaItem
 import dev.brahmkshatriya.echo.common.models.Playlist
+import dev.brahmkshatriya.echo.common.models.Shelf
 import dev.brahmkshatriya.echo.common.models.Track
 import dev.brahmkshatriya.echo.common.models.User
 
@@ -12,16 +14,29 @@ import dev.brahmkshatriya.echo.common.models.User
  */
 object ModelTypeHelper {
     /**
+     * Constant to add to extras to mark a converted Artist
+     * This helps identify Artists that were converted from Users
+     */
+    const val CONVERTED_FROM_USER_KEY = "convertedFromUser"
+    const val CONVERTED_FROM_USER_VALUE = "true"
+    
+    /**
      * Safe conversion from User to Artist
+     * Adds a special flag in extras to mark this as a converted object
      */
     @JvmStatic
-    fun userToArtist(user: User): Artist = Artist(
-        id = user.id,
-        name = user.name,
-        cover = user.cover,
-        subtitle = user.subtitle,
-        extras = user.extras
-    )
+    fun userToArtist(user: User): Artist {
+        val newExtras = user.extras.toMutableMap().apply {
+            put(CONVERTED_FROM_USER_KEY, CONVERTED_FROM_USER_VALUE)
+        }
+        return Artist(
+            id = user.id,
+            name = user.name,
+            cover = user.cover,
+            subtitle = user.subtitle,
+            extras = newExtras
+        )
+    }
     
     /**
      * Safe conversion from Artist to User
@@ -36,12 +51,51 @@ object ModelTypeHelper {
     )
     
     /**
+     * Check if an Artist was converted from a User
+     */
+    @JvmStatic
+    fun isConvertedArtist(artist: Artist): Boolean {
+        return artist.extras[CONVERTED_FROM_USER_KEY] == CONVERTED_FROM_USER_VALUE
+    }
+    
+    /**
+     * Safely handle any object as an Artist
+     * This method helps prevent ClassCastExceptions in the UnifiedExtension withExtensionId methods
+     */
+    @JvmStatic
+    fun safeArtistConversion(obj: Any?): Artist? {
+        return when (obj) {
+            is Artist -> obj
+            is User -> userToArtist(obj)
+            else -> null
+        }
+    }
+
+    /**
+     * Safe guard for conversion in lists
+     */
+    @JvmStatic
+    fun safeArtistListConversion(list: List<Any>): List<Artist> {
+        return list.mapNotNull { item -> 
+            when (item) {
+                is Artist -> item
+                is User -> userToArtist(item)
+                else -> null
+            }
+        }
+    }
+    
+    /**
      * Ensure Artists in Album are proper Artist objects, not Users
      */
     @JvmStatic
     fun ensureProperArtistsInAlbum(album: Album): Album {
-        val artists = album.artists.map { 
-            if (it !is Artist) userToArtist(it as User) else it
+        val artists = album.artists.mapNotNull { artist ->
+            when (artist) {
+                is Artist -> artist
+                is User -> userToArtist(artist)
+                else -> null
+            }
         }
         
         return album.copy(artists = artists)
@@ -52,11 +106,21 @@ object ModelTypeHelper {
      */
     @JvmStatic
     fun ensureProperArtistsInTrack(track: Track): Track {
-        val artists = track.artists.map { 
-            if (it !is Artist) userToArtist(it as User) else it
+        val artists = track.artists.mapNotNull { artist ->
+            when (artist) {
+                is Artist -> artist
+                is User -> userToArtist(artist)
+                else -> null
+            }
         }
         
-        return track.copy(artists = artists)
+        // Also fix album artists if the track has an album
+        val fixedAlbum = track.album?.let { ensureProperArtistsInAlbum(it) }
+        
+        return track.copy(
+            artists = artists,
+            album = fixedAlbum
+        )
     }
     
     /**
@@ -64,10 +128,56 @@ object ModelTypeHelper {
      */
     @JvmStatic
     fun ensureProperAuthorsInPlaylist(playlist: Playlist): Playlist {
-        val authors = playlist.authors.map { 
-            if (it !is Artist) userToArtist(it as User) else it
+        val authors = playlist.authors.mapNotNull { author ->
+            when (author) {
+                is Artist -> author
+                is User -> userToArtist(author)
+                else -> null
+            }
         }
         
         return playlist.copy(authors = authors)
+    }
+    
+    /**
+     * Fix EchoMediaItem that might have User objects where Artist objects are expected
+     */
+    @JvmStatic
+    fun ensureProperTypesInMediaItem(item: EchoMediaItem): EchoMediaItem {
+        return when (item) {
+            is Track -> ensureProperArtistsInTrack(item)
+            is Album -> ensureProperArtistsInAlbum(item)
+            is Playlist -> ensureProperAuthorsInPlaylist(item)
+            is User -> userToArtist(item) // Convert Users to Artists directly
+            else -> item
+        }
+    }
+    
+    /**
+     * Fix a shelf containing search results
+     */
+    @JvmStatic
+    fun fixSearchResultShelf(shelf: Shelf): Shelf {
+        return when (shelf) {
+            is Shelf.Item -> Shelf.Item(ensureProperTypesInMediaItem(shelf.media))
+            
+            is Shelf.Lists.Items -> Shelf.Lists.Items(
+                id = shelf.id,
+                title = shelf.title,
+                subtitle = shelf.subtitle,
+                list = shelf.list.map { ensureProperTypesInMediaItem(it) },
+                more = shelf.more
+            )
+            
+            is Shelf.Lists.Tracks -> Shelf.Lists.Tracks(
+                id = shelf.id,
+                title = shelf.title,
+                subtitle = shelf.subtitle,
+                list = shelf.list.map { ensureProperArtistsInTrack(it) },
+                more = shelf.more
+            )
+            
+            else -> shelf // Other shelf types don't need fixing
+        }
     }
 }

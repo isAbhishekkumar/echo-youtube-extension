@@ -171,6 +171,7 @@ private fun getCover(
 fun YtmArtist.toArtist(
     quality: ThumbnailProvider.Quality,
 ): Artist {
+    // Create an Artist with a special flag to identify it as a genuine Artist object
     return Artist(
         id = id,
         name = name ?: "Unknown",
@@ -180,6 +181,8 @@ fun YtmArtist.toArtist(
             subscribe_channel_id?.let { put("subId", it) }
             subscriber_count?.let { put("subscriberCount", it.toString()) }
             subscribed?.let { put("isSubscribed", it.toString()) }
+            // Add special flag to identify this as a genuine Artist object
+            put("genuineArtist", "true")
         }
     )
 }
@@ -187,16 +190,26 @@ fun YtmArtist.toArtist(
 fun YtmArtist.toUser(
     quality: ThumbnailProvider.Quality,
 ): User {
+    // Create a User object from a YtmArtist
     return User(
         id = id,
         name = name ?: "Unknown",
-        cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf())
+        cover = thumbnail_provider?.getThumbnailUrl(quality)?.toImageHolder(mapOf()),
+        // Pass important fields as extras to ensure they're preserved during conversion
+        extras = mutableMapOf<String, String>().apply {
+            subscribe_channel_id?.let { put("subId", it) }
+            subscriber_count?.let { put("subscriberCount", it.toString()) }
+            subscribed?.let { put("isSubscribed", it.toString()) }
+            // Add a flag to identify this as originally an Artist
+            put("isArtist", "true")
+        }
     )
 }
 
 fun User.toArtist(): Artist {
-    // Use the helper class to ensure proper conversion
-    return UserToArtistHelper.safeConvertUserToArtist(this)
+    // Use the more comprehensive ModelTypeHelper to ensure proper conversion
+    // with additional safety checks to prevent ClassCastException
+    return ModelTypeHelper.userToArtist(this)
 }
 
 private fun parseYearString(yearValue: Any): Date? {

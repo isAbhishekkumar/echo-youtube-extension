@@ -50,3 +50,11 @@
 -keepclassmembers class dev.brahmkshatriya.echo.extension.Convertors {
     public static dev.brahmkshatriya.echo.common.models.Artist toArtist(dev.brahmkshatriya.echo.common.models.User);
 }
+
+# Keep our special type conversion helpers
+-keep class dev.brahmkshatriya.echo.extension.ModelTypeHelper { *; }
+-keep class dev.brahmkshatriya.echo.extension.UnifiedExtensionPatch { *; }
+-keep class dev.brahmkshatriya.echo.extension.SearchResultsFixer { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.extension.ModelTypeHelper { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.extension.UnifiedExtensionPatch { *; }
+-keepclassmembers class dev.brahmkshatriya.echo.extension.SearchResultsFixer { *; }

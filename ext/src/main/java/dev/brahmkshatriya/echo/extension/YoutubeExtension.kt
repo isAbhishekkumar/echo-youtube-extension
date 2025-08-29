@@ -1492,7 +1492,8 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
             // Get search tabs for the query
             val search = api.Search.search(query, null).getOrThrow()
             oldSearch = query to search.categories.map { (itemLayout, _) ->
-                itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                // Fix shelf items for search results
+                SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
             }
             val searchTabs = search.categories.mapNotNull { (item, filter) ->
                 filter?.let {
@@ -1517,7 +1518,11 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                     val search = api.Search.search(query, tab?.id).getOrThrow()
                     search.categories.map { (itemLayout, _) ->
                         itemLayout.items.mapNotNull { item ->
-                            item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
+                            val shelf = item.toEchoMediaItem(false, thumbnailQuality)?.toShelf()
+                            if (shelf != null) {
+                                // Fix shelf items for search results
+                                SearchResultsFixer.fixSearchResultShelf(shelf)
+                            } else null
                         }
                     }.flatten()
                 }
@@ -1530,7 +1535,8 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
                         params = params, continuation = continuation
                     ).getOrThrow()
                     val data = result.layouts.map { itemLayout ->
-                        itemLayout.toShelf(api, SINGLES, thumbnailQuality)
+                        // Fix shelf items for search results in tabs
+                        SearchResultsFixer.fixSearchResultShelf(itemLayout.toShelf(api, SINGLES, thumbnailQuality))
                     }
                     Page(data, result.ctoken)
                 }
@@ -1582,7 +1588,11 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
         )
     }
 
-    suspend fun radio(user: User) = radio(UserToArtistHelper.safeConvertUserToArtist(user))
+    suspend fun radio(user: User): Radio {
+        // First fix the User object with SearchResultsFixer to ensure it's properly converted to an Artist
+        val artist = SearchResultsFixer.fixSearchResultItem(user) as Artist
+        return radio(artist)
+    }
 
     suspend fun radio(playlist: Playlist): Radio {
         val track = loadTracks(playlist)?.loadAll()?.lastOrNull()
