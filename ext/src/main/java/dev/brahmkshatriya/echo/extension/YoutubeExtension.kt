@@ -1589,8 +1589,8 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     }
 
     suspend fun radio(user: User): Radio {
-        // First fix the User object with SearchResultsFixer to ensure it's properly converted to an Artist
-        val artist = SearchResultsFixer.fixSearchResultItem(user) as Artist
+        // Convert the User to Artist using ModelTypeHelper which guarantees an Artist
+        val artist = ModelTypeHelper.userToArtist(user)
         return radio(artist)
     }
 
@@ -1935,12 +1935,18 @@ class YoutubeExtension : ExtensionClient, HomeFeedClient, TrackClient, SearchFee
     
     // Required method implementations to satisfy the interface
     override suspend fun radio(item: EchoMediaItem, context: EchoMediaItem?): Radio {
-        return when(item) {
-            is Track -> radio(item)
-            is Album -> radio(item)
-            is Artist -> radio(item)
-            is Playlist -> radio(item)
-            else -> throw ClientException.NotSupported("Radio not supported for this media item")
+        // Fix any User objects that might be passed as EchoMediaItem
+        val fixedItem = when(item) {
+            is User -> ModelTypeHelper.userToArtist(item)
+            else -> item
+        }
+        
+        return when(fixedItem) {
+            is Track -> radio(fixedItem)
+            is Album -> radio(fixedItem)
+            is Artist -> radio(fixedItem)
+            is Playlist -> radio(fixedItem)
+            else -> throw ClientException.NotSupported("Radio not supported for this media item type")
         }
     }
     
